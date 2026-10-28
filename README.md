@@ -80,6 +80,67 @@ SQL 审核内置 **279 条标准规则**：MySQL 82、TiDB 82、PostgreSQL 58、
 
 ---
 
+## 元数据库
+
+平台自身的数据全部落在一个 MySQL 实例里（下称「元数据库」）。**它只存元数据，不存业务数据** ——
+业务数据始终在被管的数据库实例与备份存储目标上。
+
+存什么：用户 / 角色 / 权限点、实例登记与规范绑定、工单与执行记录、备份任务与备份集、监控指标字典与告警、慢日志、审计流水。
+
+### 1. 建库建账号
+
+```sql
+CREATE DATABASE jaysql DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+CREATE USER 'jaysql'@'%' IDENTIFIED BY '<换成你的密码>';
+GRANT ALL PRIVILEGES ON jaysql.* TO 'jaysql'@'%';
+FLUSH PRIVILEGES;
+```
+
+要求：MySQL **≥ 5.7**（建议 5.7 / 8.0），字符集 `utf8mb4`，账号需有**建表与改表**权限。
+
+### 2. 把连接信息写进配置
+
+`config.yaml` 的 `database` 段（字段名以下表为准，`user` / `dbname` 这类写法不生效）：
+
+```yaml
+database:
+    driver: "mysql"
+    host: "127.0.0.1"
+    port: 3306
+    database: "jaysql"        # 库名
+    username: "jaysql"        # 用户名
+    password: "<你的密码>"
+    charset: "utf8mb4"
+    max_idle_conns: 64
+    max_open_conns: 64
+    conn_max_life_time: 3600
+    conn_max_idle_time: 3600
+```
+
+### 3. 表结构不用手工灌
+
+**首次启动会自动建表并写入种子数据** —— 约 50 张业务表（`AutoMigrate`，InnoDB + utf8mb4），
+以及管理员账号、角色与权限点、SQL 审核规则、监控指标字典与模板、大模型厂商模板、系统参数。
+
+因此：
+
+* 不需要手工执行任何建表脚本
+* `backend/sql/*.sql` 是**存量环境用的演进脚本**（按日期命名的灰度修复 / 数据订正），新部署**不需要跑**；
+  仅当从旧版本升级、且脚本注释明确指向你的版本时才按需执行
+
+> 升级前建议先备份元数据库：`AutoMigrate` 只会增量加列加索引、不会删列，但版本回退时旧程序未必兼容新列。
+
+### 常见问题
+
+| 现象 | 原因 |
+| :--- | :--- |
+| 启动报 `Access denied` | `username` / `password` 写错，或账号没有 `jaysql` 库的权限 |
+| 启动报 `Unknown database` | 库没建，或 `database` 字段写错（注意是 `database`，不是 `dbname`） |
+| 表建好了但页面空白 | 元库建表成功但登录态异常，检查 `app.secret_key` 是否为 32 位 |
+| 换了 `secret_key` 后全员掉线 | JWT 与该 key 同源，改 key 会让已签发 token 全部失效，属预期行为 |
+
+---
+
 ## 快速开始
 
 ### 方式一：下载二进制
