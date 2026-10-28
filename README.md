@@ -197,6 +197,16 @@ cp config.yaml.template config.yaml
 
 ---
 
+## 在线体验
+
+[体验地址](https://www.jaysql.top/)
+
+用户名：jaysql
+
+密码：Jaysql@2026
+
+
+
 ## 目录结构
 
 ```
