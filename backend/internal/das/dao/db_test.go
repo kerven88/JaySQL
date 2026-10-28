@@ -3,6 +3,7 @@ package dao
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -120,15 +121,23 @@ var testCaseData [][]string = [][]string{
 }
 
 // 测试用例使用的数据库，建议和das放到一个DB实例
+//
+// 密码不写进代码：读环境变量 DAS_TEST_PASSWORD（与 inspect 的 MATRIX_MYSQL_PASS 同一口径），
+// 未设置时 init 直接返回、用例 t.Skip —— 保证 clone 下来不连库也能跑通 go test。
 var (
 	testCaseUser     string = "das_rw"
-	testCasePassword string = "das@1234.Com"
+	testCasePassword string = os.Getenv("DAS_TEST_PASSWORD")
 	testCaseHost     string = "127.0.0.1"
 	testCasePort     int    = 3306
 	testCaseDatabase string = "das"
+	// testCaseReady 表示测试库已连通且用例表已就绪
+	testCaseReady bool
 )
 
 func init() {
+	if testCasePassword == "" {
+		return
+	}
 	db := DB{
 		User:     testCaseUser,
 		Password: testCasePassword,
@@ -161,9 +170,13 @@ func init() {
 			}
 		}
 	}
+	testCaseReady = true
 }
 
 func TestDb(t *testing.T) {
+	if !testCaseReady {
+		t.Skip("未配置 DAS_TEST_PASSWORD，跳过需要真实 MySQL 的用例")
+	}
 	// 定义用例
 	testCases := []struct {
 		name    string
