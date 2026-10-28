@@ -1,0 +1,353 @@
+package services
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/simajiong/jaysql/internal/global"
+
+	"github.com/simajiong/jaysql/pkg/pagination"
+
+	"github.com/simajiong/jaysql/internal/users/forms"
+	"github.com/simajiong/jaysql/internal/users/models"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-sql-driver/mysql"
+	"gorm.io/datatypes"
+	"gorm.io/gorm"
+)
+
+type GetOrganizationsServices struct {
+	C *gin.Context
+}
+
+func (s *GetOrganizationsServices) getChildOrganizations(key string, level uint64) []map[string]any {
+	// 迭代子节点，获取所有递归的子节点
+	var childNodes []models.InsightOrgs
+	global.App.DB.Table("insight_orgs").Where("`key` like ? and level=?", key+"-%", level).Scan(&childNodes)
+	if len(childNodes) == 0 {
+		return nil
+	}
+	var data []map[string]any = []map[string]any{}
+	for _, row := range childNodes {
+		var childNode map[string]any = map[string]any{
+			"title": row.Name,
+			"key":   row.Key,
+		}
+		childData := s.getChildOrganizations(row.Key, row.Level+1)
+		if childData != nil {
+			childNode["children"] = childData
+		} else {
+			childNode["is-leaf"] = true
+		}
+		data = append(data, childNode)
+	}
+	return data
+}
+
+func (s *GetOrganizationsServices) Run() (responseData any) {
+	// 获取ROOT组织
+	var rootNodes []models.InsightOrgs
+	global.App.DB.Table("insight_orgs").
+		Where("parent_id=0 and level=1").
+		Scan(&rootNodes)
+	if len(rootNodes) == 0 {
+		return
+	}
+	var data []map[string]any = []map[string]any{}
+	for _, row := range rootNodes {
+		// 迭代父节点
+		var rootNode map[string]any = map[string]any{
+			"title": row.Name,
+			"key":   row.Key,
+		}
+		// 迭代子节点
+		childData := s.getChildOrganizations(row.Key, row.Level+1)
+		if childData != nil {
+			rootNode["children"] = childData
+		}
+		data = append(data, rootNode)
+	}
+	return data
+}
+
+type CreateRootOrganizationsService struct {
+	*forms.CreateRootOrganizationsForm
+	C        *gin.Context
+	Username string
+}
+
+func (s *CreateRootOrganizationsService) Run() error {
+	tx := global.App.DB.Model(&models.InsightOrgs{})
+	organization := models.InsightOrgs{Name: s.Name, ParentID: 0, Creator: s.Username, Updater: s.Username, Level: 1}
+	result := tx.Create(&organization)
+	if result.Error != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(result.Error, &mysqlErr) {
+			switch mysqlErr.Number {
+			case 1062:
+				return fmt.Errorf("记录`%s`已存在", s.Name)
+			}
+		}
+		return result.Error
+	}
+	// 更新key
+	key := fmt.Sprintf("0-%d", organization.ID)
+	global.App.DB.Model(&models.InsightOrgs{}).Where("id=?", organization.ID).Update("key", key)
+	return nil
+}
+
+type CreateChildOrganizationsService struct {
+	*forms.CreateChildOrganizationsForm
+	C        *gin.Context
+	Username string
+}
+
+func (s *CreateChildOrganizationsService) Run() error {
+	// 判断父节点是否存在
+	var parentOrganization models.InsightOrgs
+	parentResult := global.App.DB.Table("insight_orgs").Where("`key`=? and `name`=?", s.ParentNodeKey, s.ParentNodeName).First(&parentOrganization)
+	if parentResult.RowsAffected == 0 {
+		return fmt.Errorf("父节点%s不存在", s.ParentNodeName)
+	}
+	// 将path json数据转换为数组
+	var pathJsonD []string
+	if len(parentOrganization.Path) != 0 {
+		err := json.Unmarshal([]byte(parentOrganization.Path), &pathJsonD)
+		if err != nil {
+			return err
+		}
+	}
+	pathJsonD = append(pathJsonD, parentOrganization.Key)
+	// 将path数据转换为json
+	pathJson, err := json.Marshal(pathJsonD)
+	if err != nil {
+		return err
+	}
+
+	tx := global.App.DB.Model(&models.InsightOrgs{})
+	levelLength := parentOrganization.Level + 1
+	organization := models.InsightOrgs{
+		Name:     s.Name,
+		ParentID: parentOrganization.ID,
+		Path:     datatypes.JSON(pathJson),
+		Creator:  s.Username,
+		Updater:  s.Username,
+		Level:    levelLength,
+	}
+	result := tx.Create(&organization)
+	if result.Error != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(result.Error, &mysqlErr) {
+			switch mysqlErr.Number {
+			case 1062:
+				return fmt.Errorf("记录`%s`已存在", s.Name)
+			}
+		}
+		return result.Error
+	}
+	// 更新key
+	key := fmt.Sprintf("%s-%d", parentOrganization.Key, organization.ID)
+	global.App.DB.Model(&models.InsightOrgs{}).Where("id=?", organization.ID).Update("key", key)
+	return nil
+}
+
+type UpdateOrganizationsService struct {
+	*forms.UpdateOrganizationsForm
+	C        *gin.Context
+	Username string
+}
+
+func (s *UpdateOrganizationsService) Run() error {
+	tx := global.App.DB.Table("insight_orgs").Where("`key`=?", s.Key)
+	result := tx.Updates(map[string]any{
+		"name":    s.Name,
+		"Updater": s.Username,
+	})
+	if result.Error != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(result.Error, &mysqlErr) {
+			switch mysqlErr.Number {
+			case 1062:
+				return fmt.Errorf("记录`%s`已存在", s.Username)
+			}
+		}
+		return result.Error
+	}
+	return nil
+}
+
+type DeleteOrganizationsService struct {
+	*forms.DeleteOrganizationsForm
+	C *gin.Context
+}
+
+func (s *DeleteOrganizationsService) Run() error {
+	var organization models.InsightOrgs
+	result := global.App.DB.Table("insight_orgs").Where("`key`=? and `name`=?", s.Key, s.Name).First(&organization)
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("节点`%s`不存在", s.Name)
+	}
+
+	return global.App.DB.Transaction(func(tx *gorm.DB) error {
+		if err := applyOrgDescendantScope(tx, "organization_key", s.Key).
+			Delete(&models.InsightOrgUsers{}).Error; err != nil {
+			global.App.Log.Error(err)
+			return err
+		}
+
+		if err := applyOrgDescendantScope(tx, "`key`", s.Key).
+			Delete(&models.InsightOrgs{}).Error; err != nil {
+			global.App.Log.Error(err)
+			return err
+		}
+		return nil
+	})
+}
+
+type GetOrganizationsUsersServices struct {
+	*forms.GetOrganizationsUsersForm
+	C *gin.Context
+}
+
+func (s *GetOrganizationsUsersServices) Run() (responseData any, total int64, err error) {
+	type user struct {
+		models.InsightUsers
+		OrganizationKey  string `json:"organization_key"`
+		OrganizationName string `json:"organization_name"`
+		RoleID           uint64 `json:"role_id"`
+		RoleName         string `json:"role_name"`
+	}
+
+	var users []user
+
+	tx := global.App.DB.Table("insight_users u").
+		Select(`
+            u.uid,
+            u.username,
+            IFNULL(
+                CONCAT(
+                    (
+                        SELECT GROUP_CONCAT(o.name ORDER BY o.name ASC SEPARATOR '/')
+                        FROM insight_orgs o
+                        WHERE JSON_CONTAINS(c.path, CONCAT('"', o.key, '"'))
+                    ),
+                    '/',
+                    c.name
+                ),
+                c.name
+            ) AS organization_name,
+            b.organization_key,
+            b.role_id,
+            r.name AS role_name
+        `).
+		Joins("JOIN insight_org_users b ON u.uid = b.uid").
+		Joins("JOIN insight_orgs c ON c.key = b.organization_key").
+		Joins("LEFT JOIN insight_roles r ON b.role_id = r.id")
+
+	tx = applyOrgDescendantScope(tx, "b.organization_key", s.Key)
+
+	// 搜索
+	if s.Search != "" {
+		tx = tx.Where("u.username LIKE ?", "%"+s.Search+"%")
+	}
+
+	total = pagination.Pager(&s.PaginationQ, tx, &users)
+	return &users, total, nil
+}
+
+type BindOrganizationsUsersService struct {
+	*forms.BindOrganizationsUsersForm
+	C *gin.Context
+}
+
+func (s *BindOrganizationsUsersService) Run() error {
+	// 判断节点是否存在
+	var organization models.InsightOrgs
+	tx := global.App.DB.Table("insight_orgs").Where("`key`=?", s.Key).First(&organization)
+	if tx.RowsAffected == 0 {
+		return fmt.Errorf("节点[%s]不存在", s.Key)
+	}
+
+	// 使用事务确保所有绑定操作要么全部成功，要么全部失败
+	return global.App.DB.Transaction(func(tx *gorm.DB) error {
+		// 先检查所有用户是否已经绑定
+		for _, uid := range s.Users {
+			var count int64
+			tx.Model(&models.InsightOrgUsers{}).Where("uid=? AND organization_key=?", uid, s.Key).Count(&count)
+			if count > 0 {
+				// 检查用户信息
+				type user struct {
+					Username         string
+					OrganizationName string
+				}
+				var record user
+				tx.Table("insight_org_users a").
+					Select(`b.username,ifnull(
+						concat(
+							(
+								SELECT
+									GROUP_CONCAT(
+										ia.name
+										ORDER BY
+											ia.name ASC SEPARATOR '/'
+									) AS concatenated_names
+								FROM
+									insight_orgs ia
+								WHERE
+									EXISTS (
+										SELECT
+											1
+										FROM
+											insight_orgs
+										WHERE
+											JSON_CONTAINS(c.path, CONCAT('\"', ia.key, '\"'))
+									)
+							),
+							'/',
+							c.name
+						),
+						c.name
+					) as organization_name`).
+					Joins("join insight_users b on a.uid = b.uid").
+					Joins("join insight_orgs c on a.organization_key = c.key").
+					Where("b.uid=?", uid).Scan(&record)
+				return fmt.Errorf("绑定失败，当前用户%s已绑定到组织[%s]，不能重复绑定", record.Username, record.OrganizationName)
+			}
+		}
+
+		// 所有用户都未绑定，开始创建记录
+		for _, uid := range s.Users {
+			result := tx.Create(&models.InsightOrgUsers{Uid: uid, OrganizationKey: s.Key, RoleID: s.Roles})
+			if result.Error != nil {
+				return result.Error
+			}
+		}
+
+		return nil
+	})
+}
+
+type DeleteOrganizationsUsersService struct {
+	*forms.DeleteOrganizationsUsersForm
+	C *gin.Context
+}
+
+func (s *DeleteOrganizationsUsersService) Run() error {
+	var organizationUsers models.InsightOrgUsers
+	result := global.App.DB.Table("insight_org_users").Where("`organization_key`=? and `uid`=?", s.Key, s.Uid).First(&organizationUsers)
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("记录不存在")
+	}
+
+	return global.App.DB.Transaction(func(tx *gorm.DB) error {
+		// 删除当前节点
+		if err := tx.Where("`organization_key`=? and `uid`=?", s.Key, s.Uid).
+			Delete(&models.InsightOrgUsers{}).Error; err != nil {
+			global.App.Log.Error(err)
+			return err
+		}
+		return nil
+	})
+}

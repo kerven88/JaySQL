@@ -1,0 +1,190 @@
+package views
+
+import (
+	"github.com/simajiong/jaysql/pkg/response"
+
+	"github.com/simajiong/jaysql/internal/users/forms"
+	"github.com/simajiong/jaysql/internal/users/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+func GetUsersView(c *gin.Context) {
+	var form forms.GetUsersForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.GetUsersServices{
+		GetUsersForm: &form,
+		C:            c,
+	}
+	returnData, total, err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.PaginationSuccess(c, total, returnData)
+}
+
+func CreateUsersView(c *gin.Context) {
+	var form forms.CreateUsersForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.CreateUsersService{
+		CreateUsersForm: &form,
+		C:               c,
+	}
+	err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, nil, "success")
+}
+
+func RegisterUserView(c *gin.Context) {
+	var form forms.RegisterUserForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.RegisterUserService{
+		RegisterUserForm: &form,
+		C:                c,
+	}
+	if err := service.Run(); err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{
+		"username": form.Username,
+	}, "注册成功，请登录")
+}
+
+func UpdateUsersView(c *gin.Context) {
+	uid, ok := parseUint64Param(c, "uid")
+	if !ok {
+		return
+	}
+	var form forms.UpdateUsersForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.UpdateUsersService{
+		UpdateUsersForm: &form,
+		C:               c,
+		UID:             uid,
+	}
+	err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, nil, "success")
+}
+
+func DeleteUsersView(c *gin.Context) {
+	uid, ok := parseUint64Param(c, "uid")
+	if !ok {
+		return
+	}
+	username, ok := getUsername(c)
+	if !ok {
+		return
+	}
+	service := services.DeleteUsersService{
+		C:               c,
+		UID:             uid,
+		CurrentUsername: username,
+	}
+	err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, nil, "success")
+}
+
+func BatchDeleteUsersView(c *gin.Context) {
+	username, ok := getUsername(c)
+	if !ok {
+		return
+	}
+	var form forms.BatchDeleteUsersForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.BatchDeleteUsersService{
+		C:               c,
+		UIDs:            form.UIDs,
+		CurrentUsername: username,
+	}
+	count, err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"count": count}, "success")
+}
+
+func ResetUsersPasswordView(c *gin.Context) {
+	var form forms.ResetUsersPasswordForm
+	if err := c.ShouldBind(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	service := services.ResetUsersPasswordService{
+		ResetUsersPasswordForm: &form,
+		C:                      c,
+	}
+	err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, nil, "success")
+}
+
+func ChangeUserAvatarView(c *gin.Context) {
+	username, ok := getUsername(c)
+	if !ok {
+		return
+	}
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	service := services.ChangeUserAvatarService{
+		C:        c,
+		Username: username,
+		File:     file,
+	}
+	err = service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, nil, "success")
+}
+
+func GetUserAccessView(c *gin.Context) {
+	uid, ok := parseUint64Param(c, "uid")
+	if !ok {
+		return
+	}
+	service := services.GetUserAccessService{
+		UID: uid,
+	}
+	returnData, err := service.Run()
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, returnData, "success")
+}

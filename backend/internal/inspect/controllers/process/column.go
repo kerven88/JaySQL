@@ -1,0 +1,344 @@
+package process
+
+import (
+	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/simajiong/jaysql/pkg/kv"
+	"github.com/simajiong/jaysql/pkg/utils"
+
+	"github.com/simajiong/jaysql/internal/inspect/config"
+
+	"github.com/pingcap/tidb/pkg/parser/mysql"
+)
+
+// 检查列的属性
+type ColOptions struct {
+	Table           string      // 表名
+	OldColumn       string      // 旧列, CHANGE [COLUMN] old_col_name new_col_name中的old_col_name
+	Column          string      // 列名
+	Tp              byte        // 列类型
+	Flen            int         // 类型长度
+	NotNullFlag     bool        // 列是否NOT NULL
+	HasDefaultValue bool        // 列是否有默认值
+	DefaultValue    interface{} // 列的默认值
+	DefaultIsNull   bool        // 列默认值是否为NULL
+	HasComment      bool        // 是否有注释
+	InspectParams   *config.InspectParams
+}
+
+// 检查列名长度
+func (c *ColOptions) CheckColumnLength() error {
+	// MAX_COLUMN_NAME_LENGTH=0 表示不限制
+	if c.InspectParams.MAX_COLUMN_NAME_LENGTH > 0 && utf8.RuneCountInString(c.Column) > c.InspectParams.MAX_COLUMN_NAME_LENGTH {
+		return fmt.Errorf("列`%s`命名长度超出限制，最大字符数为%d（表`%s`）", c.Column, c.InspectParams.MAX_COLUMN_NAME_LENGTH, c.Table)
+	}
+	return nil
+}
+
+// 检查列名合法性
+func (c *ColOptions) CheckColumnIdentifer() error {
+	if c.InspectParams.CHECK_COLUMN_IDENTIFIER {
+		// 列名大小写要求由「限制字段名大小写」规则的 name_case 参数决定，默认小写；
+		// 报错文案回显当前生效的大小写要求与正则，便于确认配置是否生效
+		pattern := utils.LowerNamePattern
+		caseText := "小写"
+		if strings.EqualFold(strings.TrimSpace(c.InspectParams.COLUMN_NAME_CASE), "upper") {
+			pattern = utils.UpperNamePattern
+			caseText = "大写"
+		}
+		if ok := utils.IsMatchPattern(pattern, c.Column); !ok {
+			return fmt.Errorf("列`%s`命名不符合要求：必须为%s，仅允许匹配正则`%s`（表`%s`）", c.Column, caseText, pattern, c.Table)
+		}
+	}
+	return nil
+}
+
+// 检查列名是否为关键字（关键字范围由规范配置，未配置时使用 MySQL+PG 默认全集）
+func (c *ColOptions) CheckColumnIdentiferKeyword() error {
+	if c.InspectParams.CHECK_IDENTIFER_KEYWORD {
+		if _, ok := c.InspectParams.IdentifierKeywordSet()[strings.ToUpper(c.Column)]; ok {
+			return fmt.Errorf("列`%s`命名不允许使用关键字（表`%s`）", c.Column, c.Table)
+		}
+	}
+	return nil
+}
+
+// 检查列注释
+func (c *ColOptions) CheckColumnComment() error {
+	if c.InspectParams.CHECK_COLUMN_COMMENT && !c.HasComment {
+		return fmt.Errorf("列`%s`必须要有注释（表`%s`）", c.Column, c.Table)
+	}
+	return nil
+}
+
+// char长度限制：超过配置的最大允许长度时告警
+func (c *ColOptions) CheckColumnCharToVarchar() error {
+	// COLUMN_MAX_CHAR_LENGTH=0 表示不限制（规则关闭时的取值）
+	if c.InspectParams.COLUMN_MAX_CHAR_LENGTH > 0 && c.InspectParams.COLUMN_MAX_CHAR_LENGTH < c.Flen && c.Tp == mysql.TypeString {
+		// 文案必须回显配置的上限值，否则使用者无法确认「CHAR 最大允许长度」配置是否生效
+		return fmt.Errorf("列`%s`长度太大（max = %d），当前char长度为%d，请调整长度或改用varchar类型（表`%s`）", c.Column, c.InspectParams.COLUMN_MAX_CHAR_LENGTH, c.Flen, c.Table)
+	}
+	return nil
+}
+
+// 最大允许定义的varchar长度
+func (c *ColOptions) CheckColumnMaxVarcharLength() error {
+	if c.InspectParams.MAX_VARCHAR_LENGTH > 0 && c.InspectParams.MAX_VARCHAR_LENGTH < c.Flen && c.Tp == mysql.TypeVarchar {
+		return fmt.Errorf("列`%s`长度太大（max = %d），当前varchar长度为%d，请使用BLOB或TEXT类型替代（表`%s`）", c.Column, c.InspectParams.MAX_VARCHAR_LENGTH, c.Flen, c.Table)
+	}
+	return nil
+}
+
+// 将float/double转成int/bigint/decimal等
+func (c *ColOptions) CheckColumnFloatDouble() error {
+	if c.InspectParams.CHECK_COLUMN_FLOAT_DOUBLE {
+		if c.Tp == mysql.TypeFloat || c.Tp == mysql.TypeDouble {
+			return fmt.Errorf("列`%s`的类型为float或double，请使用int/bigint/decimal类型（表`%s`）", c.Column, c.Table)
+		}
+	}
+	return nil
+}
+
+// mysqlTypeName 把 MySQL 内部类型码映射为用户可识别的类型名（小写）
+func mysqlTypeName(tp byte) string {
+	switch tp {
+	case mysql.TypeTiny:
+		return "tinyint"
+	case mysql.TypeShort:
+		return "smallint"
+	case mysql.TypeInt24:
+		return "mediumint"
+	case mysql.TypeLong:
+		return "int"
+	case mysql.TypeLonglong:
+		return "bigint"
+	case mysql.TypeNewDecimal:
+		return "decimal"
+	case mysql.TypeFloat:
+		return "float"
+	case mysql.TypeDouble:
+		return "double"
+	case mysql.TypeString:
+		return "char"
+	case mysql.TypeVarchar, mysql.TypeVarString:
+		return "varchar"
+	case mysql.TypeTinyBlob:
+		return "tinyblob"
+	case mysql.TypeMediumBlob:
+		return "mediumblob"
+	case mysql.TypeLongBlob:
+		return "longblob"
+	case mysql.TypeBlob:
+		return "blob"
+	case mysql.TypeDate:
+		return "date"
+	case mysql.TypeDuration:
+		return "time"
+	case mysql.TypeDatetime:
+		return "datetime"
+	case mysql.TypeTimestamp:
+		return "timestamp"
+	case mysql.TypeYear:
+		return "year"
+	case mysql.TypeEnum:
+		return "enum"
+	case mysql.TypeSet:
+		return "set"
+	case mysql.TypeBit:
+		return "bit"
+	case mysql.TypeJSON:
+		return "json"
+	case mysql.TypeGeometry:
+		return "geometry"
+	default:
+		return ""
+	}
+}
+
+// 列不允许定义的类型
+func (c *ColOptions) CheckColumnNotAllowedType() error {
+	if !c.InspectParams.ENABLE_COLUMN_JSON_TYPE && c.Tp == mysql.TypeJSON {
+		return fmt.Errorf("列`%s`不允许定义JSON类型（表`%s`）", c.Column, c.Table)
+	}
+	if !c.InspectParams.ENABLE_COLUMN_BLOB_TYPE && (c.Tp == mysql.TypeTinyBlob || c.Tp == mysql.TypeMediumBlob || c.Tp == mysql.TypeLongBlob || c.Tp == mysql.TypeBlob) {
+		return fmt.Errorf("列`%s`不允许定义BLOB/TEXT类型（表`%s`）", c.Table, c.Column)
+	}
+	if !c.InspectParams.ENABLE_COLUMN_TIMESTAMP_TYPE && c.Tp == mysql.TypeTimestamp {
+		return fmt.Errorf("列`%s`不允许定义TIMESTAMP类型（表`%s`）", c.Column, c.Table)
+	}
+	if !c.InspectParams.ENABLE_COLUMN_BIT_TYPE && c.Tp == mysql.TypeBit {
+		return fmt.Errorf("列`%s`不允许定义BIT类型（表`%s`）", c.Column, c.Table)
+	}
+	// 规范配置的禁用类型列表（规则 limit_col_no_use_partial_数据type）
+	if c.InspectParams.CHECK_COLUMN_FORBIDDEN_TYPES {
+		if tpName := mysqlTypeName(c.Tp); tpName != "" && c.InspectParams.IsForbiddenMySQLType(tpName) {
+			return fmt.Errorf("列`%s`不允许定义%s类型（表`%s`）", c.Column, strings.ToUpper(tpName), c.Table)
+		}
+	}
+	return nil
+}
+
+// 检查列not null
+func (c *ColOptions) CheckColumnNotNull() error {
+	if !c.InspectParams.ENABLE_COLUMN_NOT_NULL {
+		return nil
+	}
+	// 允许为NULL的类型
+	allowNULLType := []byte{mysql.TypeBlob, mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeJSON}
+	// 是否允许时间类型设置为null
+	if c.InspectParams.ENABLE_COLUMN_TIME_NULL {
+		allowNULLType = append(allowNULLType, []byte{mysql.TypeDatetime, mysql.TypeTimestamp, mysql.TypeDate, mysql.TypeYear}...)
+	}
+	// 列必须定义NOT NULL
+	if !utils.IsByteContain(allowNULLType, c.Tp) && !c.NotNullFlag {
+		return fmt.Errorf("列`%s`必须定义为`NOT NULL`（表`%s`）", c.Column, c.Table)
+	}
+	// 不合法的定义`NOT NULL DEFAULT NULL`
+	if c.NotNullFlag && c.HasDefaultValue && c.DefaultIsNull {
+		return fmt.Errorf("列`%s`不能定义`NOT NULL DEFAULT NULL`（表`%s`）", c.Column, c.Table)
+	}
+	return nil
+}
+
+// 检查列默认值
+func (c *ColOptions) CheckColumnDefaultValue() error {
+	// BLOB,TEXT,GEOMETRY,JSON类型不能设置默认值
+	cannotSetDefaultValueType := []byte{mysql.TypeBlob, mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeJSON, mysql.TypeGeometry}
+	if utils.IsByteContain(cannotSetDefaultValueType, c.Tp) {
+		if c.HasDefaultValue {
+			return fmt.Errorf("列`%s`不能有一个默认值(BLOB/TEXT/GEOMETRY/JSON类型不能有一个默认值)（表`%s`）", c.Column, c.Table)
+		}
+	}
+	// 列需要设置默认值
+	if c.InspectParams.CHECK_COLUMN_DEFAULT_VALUE && !c.HasDefaultValue && !utils.IsByteContain(cannotSetDefaultValueType, c.Tp) {
+		return fmt.Errorf("列`%s`需要设置一个默认值（表`%s`）", c.Column, c.Table)
+	}
+	// 检查默认值(有默认值、且不为NULL)和数据类型是否匹配，Invalid default value
+	if c.HasDefaultValue && !c.DefaultIsNull && !utils.IsByteContain(cannotSetDefaultValueType, c.Tp) {
+		switch c.Tp {
+		case mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24,
+			mysql.TypeLong, mysql.TypeLonglong,
+			mysql.TypeYear,
+			mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:
+			// 验证string型默认值的合法性
+			switch val := c.DefaultValue.(type) {
+			case string:
+				_, intErr := strconv.ParseInt(val, 10, 16)
+				_, floatErr := strconv.ParseFloat(val, 64)
+				if intErr != nil && floatErr != nil {
+					return fmt.Errorf("列`%s`默认值和类型不匹配（表`%s`）", c.Column, c.Table)
+				}
+			}
+		case mysql.TypeVarchar, mysql.TypeString:
+			var defaultStr string
+			defaultStr, ok := c.DefaultValue.(string)
+			if !ok {
+				return fmt.Errorf("列`%s`的默认值类型应为字符串但获取到其他类型（表`%s`）", c.Column, c.Table)
+			}
+			// 判断string型默认值的长度是否超过了定义的长度
+			if utf8.RuneCountInString(defaultStr) > c.Flen {
+				return fmt.Errorf("列`%s`的默认值超过了字段类型定义的长度（表`%s`）", c.Column, c.Table)
+			}
+		}
+	}
+	// 有默认值，配置了无效的默认值，如default current_timestamp
+	if c.HasDefaultValue && !(c.Tp == mysql.TypeTimestamp || c.Tp == mysql.TypeDatetime) && c.DefaultValue == "current_timestamp" {
+		return fmt.Errorf("列`%s`配置了无效的默认值(default current_timestamp)（表`%s`）", c.Column, c.Table)
+	}
+	return nil
+}
+
+// CheckColsTypeChanged
+func CheckColsTypeChanged(col ColOptions, vCol ColOptions, InspectParams *config.InspectParams, kv *kv.KVCache, tp string, table string) error {
+	// tp = modify or change
+	var oriColumn string
+	if tp == "modify" {
+		oriColumn = col.Column
+	}
+	if tp == "change" {
+		oriColumn = col.OldColumn
+	}
+	// 检查change的列是否进行列类型变更
+	intMap := map[byte]string{
+		mysql.TypeTiny:     "tinyint",
+		mysql.TypeShort:    "smallint",
+		mysql.TypeLong:     "int",
+		mysql.TypeInt24:    "mediumint",
+		mysql.TypeLonglong: "bigint",
+	}
+	intTp := []byte{mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeInt24, mysql.TypeLonglong}
+
+	stringMap := map[byte]string{
+		mysql.TypeString:  "char",
+		mysql.TypeVarchar: "varchar",
+	}
+	stringTp := []byte{mysql.TypeString, mysql.TypeVarchar}
+
+	// BLOB/TEXT 族：tiny→medium→long 按容量递增排序（text 家族与 blob 家族在
+	// parser 中共用同一组 Tp 常量，无法从 Tp 区分，展示名统一写作 text/blob）。
+	// text→mediumtext→longtext 与 int→bigint 同为安全扩容，纳入兼容白名单。
+	blobMap := map[byte]string{
+		mysql.TypeTinyBlob:   "tinytext/blob",
+		mysql.TypeBlob:       "text/blob",
+		mysql.TypeMediumBlob: "mediumtext/mediumblob",
+		mysql.TypeLongBlob:   "longtext/longblob",
+	}
+	blobTp := []byte{mysql.TypeTinyBlob, mysql.TypeBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob}
+
+	// DB版本
+	dbVersionIns := DbVersion{Version: kv.Get("dbVersion").(string)}
+
+	// 匿名函数
+	funcCheck := func() error {
+		// 开启了兼容变更模式，适用于tidb和mysql
+		// 允许同一类型，不同长度变更且变更后的长度必须大于变更前的长度
+		// 允许操作: tinyint-> int、int->bigint、char->varchar ...
+		// 不允许操作：int -> tinyint、varchar -> char ...
+		var tidbTips string
+		if dbVersionIns.IsTiDB() {
+			tidbTips = "(TiDB不支持当前数据类型变更)"
+		}
+		if utils.IsByteContain(intTp, col.Tp) && utils.IsByteContain(intTp, vCol.Tp) {
+			if bytes.IndexByte(intTp, col.Tp) < bytes.IndexByte(intTp, vCol.Tp) {
+				return fmt.Errorf("列`%s`不允许变更数据类型(%s -> %s)（表`%s`）%s", oriColumn, intMap[vCol.Tp], intMap[col.Tp], table, tidbTips)
+			}
+		} else if utils.IsByteContain(stringTp, col.Tp) && utils.IsByteContain(stringTp, vCol.Tp) {
+			if bytes.IndexByte(stringTp, col.Tp) < bytes.IndexByte(stringTp, vCol.Tp) {
+				return fmt.Errorf("列`%s`不允许变更数据类型(%s -> %s)（表`%s`）%s", oriColumn, stringMap[vCol.Tp], stringMap[col.Tp], table, tidbTips)
+			}
+		} else if utils.IsByteContain(blobTp, col.Tp) && utils.IsByteContain(blobTp, vCol.Tp) {
+			if bytes.IndexByte(blobTp, col.Tp) < bytes.IndexByte(blobTp, vCol.Tp) {
+				return fmt.Errorf("列`%s`不允许变更数据类型(%s -> %s)（表`%s`）%s", oriColumn, blobMap[vCol.Tp], blobMap[col.Tp], table, tidbTips)
+			}
+		} else {
+			if col.Tp != vCol.Tp {
+				return fmt.Errorf("列`%s`不允许变更数据类型（表`%s`）", col.Column, table)
+			}
+		}
+		return nil
+	}
+
+	if oriColumn == vCol.Column {
+		if InspectParams.ENABLE_COLUMN_TYPE_CHANGE {
+			// 允许列类型变更
+			return nil
+		}
+		// 不允许列类型变更
+		// 当ENABLE_COLUMN_TYPE_CHANGE = false时，ENABLE_COLUMN_TYPE_CHANGE_COMPATIBLE生效
+		if InspectParams.ENABLE_COLUMN_TYPE_CHANGE_COMPATIBLE {
+			// 启用兼容模式
+			return funcCheck()
+		}
+		if !InspectParams.ENABLE_COLUMN_TYPE_CHANGE_COMPATIBLE {
+			// 禁用兼容模式
+			if col.Tp != vCol.Tp {
+				return fmt.Errorf("列`%s`不允许变更数据类型（表`%s`）", col.Column, table)
+			}
+		}
+	}
+	return nil
+}

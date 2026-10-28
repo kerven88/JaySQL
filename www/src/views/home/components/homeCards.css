@@ -1,0 +1,97 @@
+/**
+ * 首页下半区三张面板（快捷入口 / 常用文档 / 相关热文）的公共外观。
+ *
+ * 为什么单独成文件：这三块分布在 index.vue 与两个子组件里，各自的 <style scoped>
+ * 互不穿透；抽成全局片段后，卡片圆角、标题、列表的统一口径只有一份，
+ * 改一次三处同时生效，避免出现「同一页里三种卡片阴影」的尴尬。
+ *
+ * 内外边距一律用 clamp() 跟着视口宽度缩放：首页要在一屏内放完三个区块，
+ * 窄屏（1366 及以下）必须自动收紧，宽屏（1920+）再放开，避免固定值一端留白一端溢出。
+ */
+
+.home-panel-card {
+  border-radius: 22px;
+  border: 1px solid rgba(27, 73, 88, 0.06);
+  box-shadow: 0 10px 24px rgba(18, 58, 72, 0.05);
+}
+
+.home-panel-card > .ant-card-head {
+  min-height: clamp(40px, 3.2vw, 48px);
+  padding: 0 clamp(14px, 1.1vw, 18px);
+  border-bottom: 1px solid rgba(27, 73, 88, 0.06);
+}
+
+.home-panel-card > .ant-card-head > .ant-card-head-wrapper > .ant-card-head-title {
+  padding: clamp(8px, 0.7vw, 12px) 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #14313d;
+}
+
+.home-panel-card > .ant-card-body {
+  padding: clamp(8px, 0.7vw, 12px) clamp(10px, 1vw, 14px) clamp(10px, 0.8vw, 14px);
+}
+
+.home-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: clamp(3px, 0.35vw, 6px) 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.home-panel-item:hover {
+  background: rgba(58, 184, 155, 0.08);
+}
+
+/* 无外链 / 不可跳转的条目：不给指针、不给 hover 反馈，避免看起来像点了没反应 */
+.home-panel-item.is-static {
+  cursor: default;
+}
+
+.home-panel-item.is-static:hover {
+  background: transparent;
+}
+
+.home-panel-rank {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(27, 73, 88, 0.06);
+  font-size: 12px;
+  font-weight: 600;
+  color: #7b8f9c;
+}
+
+.home-panel-rank.is-top {
+  background: linear-gradient(135deg, #ffb32c 0%, #f08a0b 100%);
+  color: #fff;
+}
+
+.home-panel-empty {
+  padding: 18px 0;
+  text-align: center;
+  font-size: 13px;
+  color: #93a5b1;
+}
+
+@media (max-width: 767px) {
+  .home-panel-card {
+    border-radius: 18px;
+  }
+}

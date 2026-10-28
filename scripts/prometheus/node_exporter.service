@@ -1,0 +1,22 @@
+[Unit]
+Description=Node Exporter for Prometheus
+Documentation=https://prometheus.io/docs/guides/node-exporter/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=node_exporter
+Group=node_exporter
+# 不额外启用 --collector.systemd / --collector.processes：
+# 二者需要 dbus / root 权限，在非 root 下会产生大量采集错误。
+# JaySQL 只依赖 cpu/memory/filesystem/disk/net 五类，均为默认 collector。
+# 单行 ExecStart：centos01 是 systemd 219，单行最稳。
+# 监听 :9100（全网卡）—— Prometheus 要从别的机器抓，绑回环会抓不到。
+ExecStart=/data/prometheus/node_exporter/node_exporter --web.listen-address=:9100
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

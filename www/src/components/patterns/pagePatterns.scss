@@ -1,0 +1,151 @@
+/* 页面左上角主标题：全站唯一数据源。
+   备份恢复模块的【数据备份】【数据恢复】【备份集】三处统一复用此类；
+   各页面禁止再自行定义 .page-title（scoped 特异性更高会覆盖公共样式，导致字号/字重/颜色漂移）。
+   基准取自使用范围最广的一组：16px / 600 / #1f2d38（数据备份、备份集、审计策略配置原实现）。 */
+.gi-page-title {
+  font-family: var(--gi-font-family);
+  font-size: var(--gi-font-size-body-lg, 16px);
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+  color: #1f2d38;
+  white-space: nowrap;
+}
+
+.gi-pattern-toolbar {
+  min-height: 40px;
+}
+
+/* ---------------------------------------------------------------------------
+   列表页工具栏「标题 + 操作组件单行不换行」规范
+   使用处：权限管理下的【用户管理】【角色管理】【数据访问】，
+          系统配置下的【环境管理】【实例配置】【SQL 规范】【AI 能力】【公告管理】【热文管理】。
+
+   结构： .gi-page-toolbar.gi-toolbar-single-line
+            ├ .gi-page-title            （标题在内容卡片之外）
+            └ .gi-toolbar-actions       （搜索框 / 下拉框 / 按钮 全在同一行）
+
+   宽度分配规则：操作区整体 nowrap；下拉框与按钮 flex: 0 0 auto 永不收缩；
+   搜索框是唯一可收缩项（flex: 0 1 auto + min-width），窄屏时由它变窄吸收宽度。
+   极窄窗口兜底（组件总宽仍超出可视宽度，如实例配置的 9 个组件）：
+   本行**不折行**，改为整行横向滚动 —— 所有组件仍可滑动到达。
+   注意 `.gi-page-toolbar.gi-toolbar-single-line` 用双类选择器提权：
+   base.scss 里的 .gi-page-toolbar 是 flex-wrap: wrap，两者同为单类时后者会覆盖本文件。
+--------------------------------------------------------------------------- */
+.gi-page-toolbar.gi-toolbar-single-line {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.gi-page-toolbar.gi-toolbar-single-line::-webkit-scrollbar {
+  height: 6px;
+}
+
+.gi-page-toolbar.gi-toolbar-single-line::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 32, 0.16);
+  border-radius: 3px;
+}
+
+/* 复用 PageToolbar（左右两组的页面，如实例配置）：两组内部不得折行；
+   两组都不收缩 —— 宽度不足时整行横向滚动，而不是把组件压扁 */
+.gi-page-toolbar.gi-toolbar-single-line .gi-page-toolbar-left,
+.gi-page-toolbar.gi-toolbar-single-line .gi-page-toolbar-right {
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.gi-toolbar-actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gi-spacing-sm);
+  min-width: 0;
+}
+
+/* 操作组件默认不可收缩（下拉框、按钮恒为原宽度、永不换行） */
+.gi-toolbar-actions > * {
+  flex: 0 0 auto;
+}
+
+/* 搜索框是唯一可收缩项，保证极窄窗口下整行仍不换行 */
+.gi-toolbar-actions > .gi-toolbar-search {
+  flex: 0 1 auto;
+  min-width: 132px;
+}
+
+.gi-page-toolbar-left,
+.gi-page-toolbar-right {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gi-spacing-sm);
+}
+
+.gi-page-toolbar-right {
+  margin-left: auto;
+}
+
+.gi-table-section {
+  margin-top: var(--gi-spacing-ssm);
+}
+
+.gi-toolbar-search {
+  width: min(100%, 350px);
+}
+
+.gi-expanded-row {
+  padding: var(--gi-spacing-md);
+}
+
+.modal-form {
+  margin-top: var(--gi-spacing-lg);
+}
+
+.modal-field-full-width {
+  width: 100%;
+}
+
+.gi-page-card-shell :where(.ant-card-body) {
+  padding-top: var(--gi-spacing-ssm);
+}
+
+/* 表格操作列：把默认的「链接蓝」收敛到主题色，保持 danger 删除按钮仍为红色。
+   监控配置的监控对象/采集策略/指标模板，以及告警配置的通知渠道/通知策略五处使用。 */
+.gi-table-actions {
+  .ant-btn-link:not(.ant-btn-dangerous) {
+    color: var(--ant-color-primary, #0f766e);
+  }
+
+  .ant-btn-link:not(.ant-btn-dangerous):hover {
+    color: var(--ant-color-primary-hover, #0d6b63);
+  }
+
+  .ant-btn-link:not(.ant-btn-dangerous):active {
+    color: var(--ant-color-primary-active, #0b5f58);
+  }
+
+  .ant-btn-link:not(.ant-btn-dangerous)[disabled] {
+    color: var(--ant-color-text-disabled, rgba(0, 0, 0, 0.25));
+  }
+}
+
+@media (max-width: 767px) {
+  .gi-pattern-toolbar {
+    align-items: stretch;
+  }
+
+  .gi-page-toolbar-left,
+  .gi-page-toolbar-right {
+    width: 100%;
+  }
+
+  .gi-toolbar-search {
+    width: 100%;
+  }
+}

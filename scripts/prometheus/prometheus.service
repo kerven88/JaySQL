@@ -1,0 +1,20 @@
+[Unit]
+Description=Prometheus Monitoring System
+Documentation=https://prometheus.io/docs/introduction/overview/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+# 单行 ExecStart：centos01 是 systemd 219，单行最稳，不要改成多行续行
+# 监听 127.0.0.1：JaySQL 与 Prometheus 同机，走回环即可，不对外暴露端口。
+# 若要跨机访问（例如以后 JaySQL 迁走或挂 Grafana），改成 <内网IP>:9090 并自行加防火墙。
+ExecStart=/data/prometheus/prometheus/prometheus --config.file=/data/prometheus/prometheus.yml --storage.tsdb.path=/data/prometheus/data --storage.tsdb.retention.time=15d --storage.tsdb.retention.size=20GB --web.listen-address=127.0.0.1:9090 --web.console.templates=/data/prometheus/prometheus/consoles --web.console.libraries=/data/prometheus/prometheus/console_libraries --web.enable-lifecycle --log.level=info
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

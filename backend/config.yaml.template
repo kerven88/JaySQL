@@ -1,0 +1,107 @@
+# 应用配置
+app:
+    listen_address: "0.0.0.0:8083" # 应用监听地址
+    environment: "dev" # 环境设置，可选值为dev/prod，生产写prod
+    # 必须 32 位长度，用于登录认证、密码加密。
+    # 开源安全提示：部署前请务必替换为自己的随机 32 位字符串，
+    # 切勿使用仓库里的示例值 —— 它与线上 JWT 签名同源，泄露即等于可伪造登录凭证。
+    secret_key: "CHANGE_ME_PLEASE_USE_32_CHARS_KEY"
+
+crontab:
+    sync_db_metas: "*/5 * * * *" # 每5分钟同步一次远程数据库库表元数据到本地数据库
+
+# 日志配置
+log:
+    level: "info" # 日志级别
+    root_dir: "/opt/app/goinsight/logs" # 日志根目录
+
+# MySQL数据库配置，用于存储goinsight应用数据
+database:
+    driver: "mysql" # 数据库驱动
+    host: "127.0.0.1" # 数据库主机
+    port: 3306 # 数据库端口
+    database: "jaysql" # 数据库名称
+    username: "root" # 数据库用户名
+    password: "your_password_here" # 数据库密码（请替换）
+    charset: "utf8mb4" # 数据库字符集
+    max_idle_conns: 64 # 最大空闲连接数
+    max_open_conns: 64 # 最大打开连接数
+    conn_max_life_time: 3600 # 连接的最大存活时间
+    conn_max_idle_time: 3600 # 连接的最大空闲时间
+
+# Redis 配置（已废弃，可整段删除）
+#
+# JaySQL 自 2026-10 起不再依赖 Redis：工单执行日志的实时推送改走进程内
+# 事件总线（pkg/eventbus），工单执行锁改走进程内带租约锁（pkg/lock）。
+# 此处保留仅为兼容旧版配置文件——已部署环境无需改动即可继续启动。
+#redis:
+#    host: "127.0.0.1"
+#    port: 6379
+#    password: ""
+#    db: 0
+
+# 数据查询配置
+das:
+    max_execution_time: 600000 # 查询语句最大查询执行时间
+    default_return_rows: 200 # 查询默认返回行数
+    max_return_rows: 1000 # 查询默认最大返回行数
+
+# 监控模块 —— 主机资源层指标来源
+#
+# 引擎层指标（QPS/TPS/连接数/慢SQL/复制状态等）由平台直连数据库采集，
+# 不依赖 Prometheus；这里只配置资源层（CPU/内存/磁盘/IO/网络），
+# 由 Prometheus 抓取各主机的 node_exporter(:9100) 提供。
+#
+# 读取优先级：环境变量 GOINSIGHT_PROMETHEUS_URL > PROMETHEUS_URL > 本配置项。
+# 注意：部署会用本文件覆盖 /opt/app/goinsight/config.yaml，
+#       在服务器上直接改配置无法长期保留，必须改这里。
+monitor:
+    prometheus_url: "http://127.0.0.1:9090" # Prometheus 地址（与 goInsight 同机，走回环）
+    prometheus_timeout_seconds: 5 # 单次 PromQL 查询超时（秒）
+
+# GitHub's Online Schema-migration Tool for MySQL
+# https://github.com/github/gh-ost
+ghost:
+    path: "/usr/local/bin/gh-ost" # Gh-ost工具路径
+    args: # Gh-ost工具参数列表
+        [
+            "--allow-on-master",
+            "--assume-rbr",
+            "--initially-drop-ghost-table",
+            "--initially-drop-old-table",
+            "-initially-drop-socket-file",
+            "-exact-rowcount",
+            "--approve-renamed-columns",
+            "--concurrent-rowcount=false",
+            "--chunk-size=800",
+        ]
+
+# 通知配置
+notify:
+    notice_url: "http://127.0.0.1:8083" # 告警通知里跳转回平台的地址（按实际部署域名替换）
+    wechat:
+        enable: false
+        webhook: ""
+    mail:
+        enable: false
+        username: ""
+        password: ""
+        host: ""
+        port: 587
+    dingtalk:
+        enable: false
+        webhook: ""
+        keywords: ""
+
+# 大模型能力接入
+#
+# 注意：服务商凭证（API Key / 端点）一律存储在数据库 insight_llm_providers 表中
+# 并经过 AES-256-GCM 加密，禁止写进本配置文件。
+# 本节点只保留平台级开关与安全策略。
+ai:
+    enabled: true # 是否启用 AI 能力（关闭后 AI 助手仅走规则引擎）
+    allow_insecure_http: false # 是否允许 http 端点（仅内网私有化服务需要时开启）
+    failover_enabled: true # Provider 失败时自动切换备用
+    degrade_to_rule_engine: true # 全部不可用时降级到规则解析器
+    health_check_interval: "*/5 * * * *" # 健康检查周期（预留，P2 接入定时任务）
+    request_timeout_seconds: 60 # 默认请求超时（Provider 可覆盖）

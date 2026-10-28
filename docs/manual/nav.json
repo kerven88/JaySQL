@@ -1,0 +1,4 @@
+[
+  { "id": "start", "title": "入门", "order": 10 },
+  { "id": "guide", "title": "功能指南", "order": 20 }
+]

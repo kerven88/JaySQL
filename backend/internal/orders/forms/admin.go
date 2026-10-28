@@ -1,0 +1,39 @@
+package forms
+
+import (
+	"github.com/simajiong/jaysql/pkg/pagination"
+	"gorm.io/datatypes"
+)
+
+type AdminGetApprovalFlowUnboundUsersForm struct {
+	PaginationQ pagination.Pagination
+	Search      string `form:"search"`
+}
+
+type AdminGetApprovalFlowsForm struct {
+	PaginationQ pagination.Pagination
+	Search      string `form:"search"`
+}
+
+type AdminUpdateApprovalFlowsForm struct {
+	Definition datatypes.JSON `form:"definition" json:"definition" binding:"required"`
+	Name       string         `form:"name"  json:"name" binding:"required,min=3,max=256"`
+	ClaimUsers []string       `form:"claim_users" json:"claim_users" binding:"required,min=1,dive,required"`
+}
+
+type AdminCreateApprovalFlowsForm struct {
+	Definition datatypes.JSON `form:"definition" json:"definition" binding:"required"`
+	Name       string         `form:"name"  json:"name" binding:"required,min=3,max=256"`
+	ClaimUsers []string       `form:"claim_users" json:"claim_users" binding:"required,min=1,dive,required"`
+}
+
+type AdminBindUsersToApprovalFlowForm struct {
+	ApprovalID string   `form:"approval_id"  json:"approval_id" binding:"required"`
+	Users      []string  `form:"users"  json:"users" binding:"required"`
+}
+
+type AdminGetApprovalFlowUsersForm struct {
+	PaginationQ pagination.Pagination
+	Search      string `form:"search"`
+	ApprovalID  string `form:"approval_id"  json:"approval_id" binding:"required"`
+}

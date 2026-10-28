@@ -1,0 +1,34 @@
+# Prometheus 配置 —— 为 JaySQL 监控模块提供主机资源指标（node_exporter）
+#
+# 【关键约束】JaySQL 侧用 instance=~"^<insight_instances.hostname>(?::[0-9]+)?$"
+# 精确匹配，因此这里的 targets 地址必须与实例登记值完全一致：
+#   insight_instances.hostname = "192.168.1.99"  ->  target 写 192.168.1.99:9100
+# 不要写主机名/别名/NAT 地址（除非实例表里登记的就是主机名），
+# 否则 instance 标签对不上，资源指标会静默为空、页面一直显示 "—"。
+#
+# 变更后重载：curl -X POST http://127.0.0.1:9090/-/reload   （已开启 --web.enable-lifecycle）
+# 语法校验：  /data/prometheus/prometheus/promtool check config /data/prometheus/prometheus.yml
+
+global:
+  scrape_interval: 15s      # 资源指标刷新粒度，与 JaySQL 的采集周期解耦
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: goinsight
+
+# JaySQL 自行评估告警，不使用 Prometheus Alertmanager，故无规则文件
+rule_files: []
+
+scrape_configs:
+  # 自身健康度，便于区分"Prometheus 挂了"与"exporter 挂了"
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - '127.0.0.1:9090'
+
+  # 主机资源：JaySQL 的 CPU/内存/磁盘/IO/网络 6 项全部来自这里
+  - job_name: node
+    static_configs:
+      - targets:
+          - '192.168.1.99:9100'    # centos01（平台 + MySQL + jaysql 元数据库）
+          - '192.168.1.100:9100'   # centos02（MySQL 8.0.43）
