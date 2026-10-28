@@ -370,8 +370,8 @@ func ensureDASPrincipalColumns(db *gorm.DB) {
 	}
 }
 
-// defaultAdminPasswordHash 是默认密码 1234.Com! 的 bcrypt 哈希（cost=10）
-const defaultAdminPasswordHash = "$2a$10$36U.TwQGCRC8jlse3SgQY.sJweMofGXLtEejF.xBlzQN0iqauHIN."
+// defaultAdminPasswordHash 是默认密码 Admin@2026 的 bcrypt 哈希（cost=10）
+const defaultAdminPasswordHash = "$2a$10$sHXyrEaa0/pk.o6hKtK1VuHhPQBI6./e4oP6p.R0Y1nnIXZgRPgqW"
 
 // 初始化系统管理员
 func initializeAdminUser(db *gorm.DB) {
@@ -393,7 +393,7 @@ func initializeAdminUser(db *gorm.DB) {
 			global.App.Log.Warnf("seed admin user failed: %v", err)
 			return
 		}
-		global.App.Log.Infof("init: 默认管理员 admin 已创建，默认密码 1234.Com!，请登录后及时修改")
+		global.App.Log.Infof("init: 默认管理员 admin 已创建，默认密码 Admin@2026，请登录后及时修改")
 	} else if err != nil {
 		global.App.Log.Warnf("load admin user failed: %v", err)
 		return
