@@ -96,3 +96,6 @@ www/README.md
 assets/
 go.work
 go.work.sum
+
+# Docker Compose 本地凭据
+/.env

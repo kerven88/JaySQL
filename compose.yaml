@@ -1,0 +1,55 @@
+name: jaysql
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: jaysql
+      MYSQL_USER: jaysql
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u jaysql -D jaysql -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  jaysql:
+    image: jaysql:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${JAYSQL_PORT:-8083}:8083"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /opt/app/goinsight/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - jaysql_media:/opt/app/goinsight/media
+      - jaysql_logs:/opt/app/goinsight/logs
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8083/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  mysql_data:
+  jaysql_media:
+  jaysql_logs:

@@ -182,6 +182,99 @@ cp config.yaml.template config.yaml
 ⚠️ 构建前确认 `backend/internal/orders/api/mysql/embedded/{linux-amd64,linux-arm64}/gh-ost` 存在 ——
 它被 `go:embed` 引用，缺失会直接编译失败。
 
+### 方式三：Docker Compose（源码构建）
+
+仓库提供 [`compose.yaml`](compose.yaml)、[`Dockerfile`](Dockerfile) 和 [`.env.example`](.env.example)。
+需安装 Docker Engine / Docker Desktop 与 Docker Compose v2，在仓库根目录执行。
+镜像分阶段构建 Vue 前端和 Go 后端，前端内嵌在服务中，无需另起 Nginx 容器；
+默认启动 JaySQL 与 MySQL 8.0，不依赖 Redis。首次构建需要联网下载镜像、npm 和 Go 依赖。
+
+**1. 准备配置**
+
+```bash
+cp .env.example .env
+cp backend/config.yaml.template config.yaml
+openssl rand -hex 16   # 生成 32 字符 secret_key，填入 config.yaml
+```
+
+编辑 `.env`，为 `MYSQL_ROOT_PASSWORD` 和 `MYSQL_PASSWORD` 分别设置随机密码。
+再编辑 `config.yaml`，保留模板其他配置，并修改以下字段（示例为需要合并的片段，不能替换整个文件）：
+
+```yaml
+app:
+    listen_address: "0.0.0.0:8083"
+    environment: "prod"
+    secret_key: "<替换为上一步生成的32字符随机字符串>"
+log:
+    root_dir: "/opt/app/goinsight/logs"
+database:
+    host: "mysql"
+    port: 3306
+    database: "jaysql"
+    username: "jaysql"
+    password: "<与 .env 中 MYSQL_PASSWORD 完全一致>"
+notify:
+    notice_url: "http://your-ip:8083"
+```
+
+`config.yaml` 不会自动展开 `.env` 变量，数据库密码必须手工同步；`.env` 中含 `$` 等特殊字符的值建议用单引号包裹。
+容器内 `127.0.0.1` 指向容器自身，元数据库地址应填 Compose 服务名 `mysql`。
+`notify.notice_url` 请填用户实际访问的地址。配置文件只读挂载，勿提交真实凭据。
+
+**2. 构建并启动**
+
+```bash
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+docker compose logs -f --tail=100 jaysql
+```
+
+MySQL 健康检查通过后才会启动应用，首次启动自动建表和初始化种子数据，无需执行 SQL 脚本。
+访问 <http://your-ip:8083>，初始账号 `admin` / `Admin@2026`，登录后立即修改密码。
+修改 `.env` 中的 `JAYSQL_PORT` 可调整宿主机端口，容器内仍监听 `8083`。
+前置 HTTPS 反向代理时，可将 Compose 的端口映射改成 `127.0.0.1:8083:8083`。
+
+**3. 持久化与日常维护**
+
+| 卷 | 内容 |
+| :--- | :--- |
+| `mysql_data` | MySQL 元数据库 |
+| `jaysql_media` | 上传文件（头像、附件等） |
+| `jaysql_logs` | 应用日志 |
+
+实际卷名默认带 `jaysql_` 前缀。保管并备份 `config.yaml`（尤其是 `secret_key`）、元数据库和上传文件；
+更换 `secret_key` 还会影响已加密的实例密码及 AI 凭据，升级时应保持不变。
+MySQL 的初始化环境变量只在数据卷为空时生效，已有数据后修改 `.env` 不会自动修改数据库用户密码。
+
+```bash
+# 修改 config.yaml 后重建应用容器，使只读挂载重新加载
+docker compose up -d --force-recreate jaysql
+
+# 更新源码后重新构建（升级前先备份元数据库）
+docker compose up -d --build
+
+# 停止并删除容器，保留数据卷
+docker compose down
+```
+
+不要在需要保留数据时执行 `docker compose down -v`，它会删除上述数据卷。
+默认 MySQL 不映射宿主机端口，仅供 Compose 内网访问。
+
+**使用已有 MySQL / 可选监控**
+
+如已有元数据库，先按“元数据库”章节建库授权，将 `config.yaml` 的 `database` 改为容器可达的数据库地址，
+然后执行 `docker compose up -d --build --no-deps jaysql`，仅启动应用。
+后续更新也使用该命令；若已启动内置 MySQL，可用 `docker compose stop mysql` 停止它并保留数据卷。
+Docker Desktop 可用 `host.docker.internal` 访问宿主机；Linux 可在 `jaysql` 服务增加
+`extra_hosts: ["host.docker.internal:host-gateway"]`，并确保数据库监听地址与授权允许容器访问。
+
+需要主机资源指标时，将配置中的 `monitor.prometheus_url` 改为容器可达的 Prometheus 地址；
+node_exporter 及备份 agent / mysqldump / pg_dump / xtrabackup 按相应功能要求部署到被管主机，
+本 Compose 不会安装这些远程组件。被管数据库、SSH 和存储目标也必须对应用容器网络可达。
+
+Compose 配置语法和依赖健康检查说明见 [Docker 官方文档](https://docs.docker.com/reference/compose-file/services/)。
+
 ### 初始化与登录
 
 首次启动会自动建表并写入种子数据（管理员、角色、权限点、审核规则、监控指标字典等）。
