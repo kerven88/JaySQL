@@ -252,7 +252,8 @@
           expand-aria-label="展开资源树"
         >
             <template #left-content>
-              <ConsoleLeft ref="consoleLeftRef" />
+              <ConsoleLeft v-if="!isRedisMode" ref="consoleLeftRef" />
+              <a-empty v-else description="Redis 使用右侧 Key 浏览器，支持逻辑 DB 与模式扫描" style="padding: 32px 12px" />
             </template>
 
             <template #right-content>
@@ -264,10 +265,11 @@
                   @renderResultTable="renderResultTable"
                   @renderExecutionMessage="renderExecutionMessage"
                   @activePaneChange="handleActivePaneChange"
+                  @redisModeChange="isRedisMode = $event"
                 />
 
                 <div
-                  v-if="uiState.showResultPanel"
+                  v-if="uiState.showResultPanel && !isRedisMode"
                   class="workspace-resizer"
                   role="separator"
                   aria-label="调整编辑区与结果区高度"
@@ -277,7 +279,7 @@
                   @keydown.down.prevent="adjustEditorHeight(20)"
                 ></div>
 
-                <a-card v-if="uiState.showResultPanel" ref="resultCardRef" class="result-card" size="small">
+                <a-card v-if="uiState.showResultPanel && !isRedisMode" ref="resultCardRef" class="result-card" size="small">
                   <!-- 标题区即 Tab 导航：顶替原「查询结果」标题，Tabs 自带导航栏已隐藏 -->
                   <template #title>
                     <div class="result-tabbar">
@@ -823,6 +825,7 @@ const clearResultNotice = () => {
   resultNotice.instance_id = ''
 }
 
+const isRedisMode = ref(false)
 const handleActivePaneChange = (value) => {
   uiState.showResultPanel = !!value
 }

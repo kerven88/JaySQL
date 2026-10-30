@@ -7,6 +7,9 @@ import (
 )
 
 func RegisterDasRoutes(das *gin.RouterGroup) {
+	das.POST("redis/scan", middleware.RequirePermission("sql.console.execute"), views.ScanRedisKeysView)
+	das.POST("redis/value", middleware.RequirePermission("sql.console.execute"), views.ReadRedisValueView)
+
 	das.GET("environments", middleware.RequirePermission("sql.console.access"), views.GetEnvironmentsView)
 	das.GET("instances", middleware.RequirePermission("sql.console.access"), views.GetInstancesView)
 	das.GET("resources", middleware.RequirePermission("sql.console.access"), views.GetResourcesView)

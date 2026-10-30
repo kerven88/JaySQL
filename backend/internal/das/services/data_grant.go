@@ -142,6 +142,10 @@ type dataGrantRow struct {
 
 // DataAccessRequest 一次数据访问请求的描述
 type DataAccessRequest struct {
+	// RequireWholeDatabase is for non-SQL key browsing: narrower deny scopes must
+	// never be bypassed by scanning the entire logical database.
+	RequireWholeDatabase bool
+
 	Username   string
 	InstanceID string
 	Schema     string
@@ -396,9 +400,17 @@ func CheckDataAccess(req DataAccessRequest) error {
 	// 灰度保护：新授权表还没有任何记录（迁移未执行）时回退旧模型。
 	// 少了这一层，未迁移环境上所有新接入口会一律 403 —— 那不叫收口，叫断供。
 	if !dataGrantEnabled() {
+		if req.RequireWholeDatabase {
+			return fmt.Errorf("%w: Redis Key 浏览需要显式的实例或 DB 级查询授权", ErrNoDataGrant)
+		}
 		return legacyCheckDataAccess(scope, req)
 	}
-	ok, err := HasDataGrant(scope, req.InstanceID, req.Schema, req.Table, req.Action)
+	var ok bool
+	if req.RequireWholeDatabase {
+		ok, err = hasWholeDatabaseGrant(scope, req.InstanceID, req.Schema, req.Action)
+	} else {
+		ok, err = HasDataGrant(scope, req.InstanceID, req.Schema, req.Table, req.Action)
+	}
 	if err != nil {
 		return err
 	}
@@ -740,4 +752,28 @@ func grantTimeWindowValid(effectiveAt, expireAt *time.Time, now time.Time) bool 
 		return false
 	}
 	return true
+}
+
+// hasWholeDatabaseGrant fails closed when narrower deny rules exist. Redis Key
+// browsing currently supports instance/database scopes, not SQL table scopes.
+func hasWholeDatabaseGrant(scope *dasActorScope, instanceID, schema, action string) (bool, error) {
+	allowed, err := HasDataGrant(scope, instanceID, schema, "", action)
+	if err != nil || !allowed {
+		return false, err
+	}
+	now := time.Now()
+	tx := global.App.DB.Table("insight_das_data_grants g").Select("g.actions").
+		Where("g.instance_id = ? AND g.resource_level IN ? AND g.schema_name IN ? AND g.effect = ? AND g.status = ?", instanceID, []string{DataResourceLevelSchema, DataResourceLevelTable}, []string{schema, ""}, DataEffectDeny, DataGrantStatusActive).
+		Where("(g.effective_at IS NULL OR g.effective_at <= ?)", now).Where("(g.expire_at IS NULL OR g.expire_at > ?)", now)
+	tx = applyDataGrantPrincipalFilter(tx, "g", scope)
+	var rows []dataGrantRow
+	if err := tx.Scan(&rows).Error; err != nil {
+		return false, err
+	}
+	for _, row := range rows {
+		if grantAllowsAction(row.Actions, action) {
+			return false, nil
+		}
+	}
+	return true, nil
 }

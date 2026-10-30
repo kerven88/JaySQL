@@ -93,3 +93,7 @@ export const GrantAccessRequestApi = (data) =>
 // 审批人候选：申请页选人、详情页转交共用（只返回持有 das.access.approve 的账号）
 export const GetAccessApproverOptionsApi = (params) =>
   get('/api/v1/das/access-approver-options', params)
+
+// Redis 只读浏览，不提供任意命令入口。
+export const ScanRedisKeysApi = (data) => post('/api/v1/das/redis/scan', data)
+export const GetRedisValueApi = (data) => post('/api/v1/das/redis/value', data)

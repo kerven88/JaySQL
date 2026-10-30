@@ -1,5 +1,5 @@
 <template>
-  <div ref="consoleEditorCardRef" class="console-editor-card" @contextmenu.prevent @click="onConsoleWorkspaceClicked">
+  <div ref="consoleEditorCardRef" class="console-editor-card" :class="{ 'is-redis': isRedis }" @contextmenu.prevent @click="onConsoleWorkspaceClicked">
     <div class="console-topbar">
       <div v-if="showTopTabbar" class="topbar-row">
         <div class="tabbar-center">
@@ -215,7 +215,7 @@
       </div>
 
       <div class="toolbar-row">
-        <div v-if="hasActivePane" class="action-group">
+        <div v-if="hasActivePane && !isRedis" class="action-group">
           <a-space class="console-toolbar" :size="4">
             <a-button
               size="small"
@@ -303,7 +303,7 @@
         <div v-if="hasActivePane" class="context-group">
           <div class="context-control context-control--instance">
             <span class="control-label">实例</span>
-            <AppTooltip v-if="uiData.instance_id" :title="currentInstanceLabel" placement="topLeft">
+            <AppTooltip v-if="uiData.instance_id" :title="currentInstanceLabel" :open="instanceSelectFocused ? false : undefined" placement="topLeft">
               <div class="instance-select-shell">
               <a-select
                 class="context-select instance-select"
@@ -393,7 +393,7 @@
             </div>
           </div>
 
-          <div class="context-control context-control--database">
+          <div v-if="!isRedis" class="context-control context-control--database">
             <span class="control-label">{{ databaseLabel }}</span>
             <AppTooltip v-if="uiData.database" :title="currentDatabaseLabel" placement="topLeft">
               <a-select
@@ -532,7 +532,10 @@
     </div>
 
     <div class="console-editor-wrap" :class="{ 'is-empty': !hasActivePane }">
-      <template v-if="hasActivePane">
+      <KeepAlive :key="`${userStore.uid || ''}:${userStore.username || ''}`" :max="20">
+        <RedisKeyBrowser ref="redisBrowserRef" v-if="hasActivePane && isRedis" :key="uiData.activeKey" :instance-id="uiData.instance_id" />
+      </KeepAlive>
+      <template v-if="hasActivePane && !isRedis">
         <a-spin :spinning="currentTabLoading" tip="Loading...">
           <a-dropdown placement="bottomLeft" :trigger="['contextmenu']">
             <div class="console-editor-surface">
@@ -570,7 +573,7 @@
           </a-dropdown>
         </a-spin>
       </template>
-      <div v-else class="console-empty-state">
+      <div v-if="!hasActivePane" class="console-empty-state">
         <div class="console-home-shell">
           <div class="console-home-hero">
             <div class="console-home-illustration" aria-hidden="true">
@@ -837,6 +840,7 @@ import {
 } from '@/api/das'
 import AppTooltip from '@/components/patterns/AppTooltip.vue'
 import CodeMirror from '@/components/edit/Codemirror.vue'
+import RedisKeyBrowser from './RedisKeyBrowser.vue'
 import { useUserStore } from '@/store/user'
 import { idbDel, idbGet, idbSet } from '@/utils/idbKv'
 import {
@@ -1043,6 +1047,7 @@ const tabScrollerRef = ref(null)
 const renameInputRef = ref(null)
 const dbDictRef = ref(null)
 const codemirrorRef = ref(null)
+const redisBrowserRef = ref(null)
 const pasteAssistInputRef = ref(null)
 const copyAssistInputRef = ref(null)
 const favoritesFormState = ref({ sqltext: '' })
@@ -1061,7 +1066,7 @@ const dasInstanceData = inject('dasInstanceData')
 const dasConsoleAction = inject('dasConsoleAction')
 const dasResultNotice = inject('dasResultNotice')
 const dasFavoriteInstanceState = inject('dasFavoriteInstanceState', null)
-const emit = defineEmits(['renderResultTable', 'renderExecutionMessage', 'activePaneChange'])
+const emit = defineEmits(['renderResultTable', 'renderExecutionMessage', 'activePaneChange', 'redisModeChange'])
 
 const uiData = reactive({
   instances: [],
@@ -1238,6 +1243,7 @@ const currentDbFamily = computed(() => {
   if (fromInstance) return fromInstance
   return resolveDbFamily(uiData.db_type)
 })
+const isRedis = computed(() => String(currentInstanceMeta.value?.db_type || uiData.db_type || '').toLowerCase() === 'redis')
 const hasUserPermission = (permission) => {
   if (!permission) {
     return true
@@ -3022,7 +3028,7 @@ const fetchResources = async (instanceId, resourceType, parentPath = '', options
 }
 
 const fetchDatabaseOptions = async (instanceMeta) => {
-  if (!instanceMeta?.instance_id) {
+  if (!instanceMeta?.instance_id || String(instanceMeta?.db_type || '').toLowerCase() === 'redis') {
     uiData.databaseOptions = []
     uiData.schemaOptions = []
     return []
@@ -4364,13 +4370,13 @@ const handleConsoleShortcut = (event) => {
   const key = String(event.key || '').toLowerCase()
   const target = event.target instanceof HTMLElement ? event.target : document.activeElement
   if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && key === 'h' && !isPlainInputTarget(target)) {
-    if (!canOpenHistoryLibrary.value) return
+    if (isRedis.value || !canOpenHistoryLibrary.value) return
     event.preventDefault()
     openSqlLibraryDrawer('history')
     return
   }
   if ((event.metaKey || event.ctrlKey) && !event.altKey && event.shiftKey && key === 's' && !isPlainInputTarget(target)) {
-    if (!canOpenFavoriteLibrary.value) return
+    if (isRedis.value || !canOpenFavoriteLibrary.value) return
     event.preventDefault()
     openSqlLibraryDrawer('favorite')
     return
@@ -4786,6 +4792,7 @@ const executeSqlRequest = async ({ action, sqltext, tabKey }) => {
 }
 
 const runSqlActionBySqlText = async (action, sqlInput, options = {}) => {
+  if (isRedis.value) return
   const tabKey = uiData.activeKey
   if (runtime.tableLoadingByTab[tabKey]) {
     message.warning('当前 SQL 正在执行，请稍候或先停止执行')
@@ -4882,6 +4889,7 @@ const runSqlAction = async (action) => {
 }
 
 const executeSqlBatchByText = async (sqlInput, options = {}) => {
+  if (isRedis.value) return
   const tabKey = uiData.activeKey
   if (runtime.tableLoadingByTab[tabKey]) {
     message.warning('当前 SQL 正在执行，请稍候或先停止执行')
@@ -5313,6 +5321,22 @@ watch(
 )
 
 watch(
+  () => [uiData.activeKey, uiData.instance_id],
+  ([key, instanceId], [oldKey, oldInstanceId]) => {
+    if (key === oldKey && instanceId !== oldInstanceId) redisBrowserRef.value?.reset()
+  },
+)
+
+watch(isRedis, value => {
+  emit('redisModeChange', value)
+  if (value) {
+    uiState.isSqlLibraryDrawerOpen = false
+    uiState.isFavoritesOpen = false
+    uiState.isDbDictOpen = false
+  }
+}, { immediate: true })
+
+watch(
   () => hasActivePane.value,
   (value) => {
     emit('activePaneChange', value)
@@ -5475,6 +5499,9 @@ defineExpose({
 </script>
 
 <style scoped>
+.console-editor-card.is-redis { display: flex; flex-direction: column; flex: 1 1 auto !important; min-height: 0; }
+.is-redis .console-editor-wrap { flex: 1; min-height: 0; overflow: hidden; }
+.is-redis .console-topbar { flex-shrink: 0; }
 .console-editor-card {
   border: 0;
   border-radius: 10px;
