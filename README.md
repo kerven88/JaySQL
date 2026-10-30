@@ -189,6 +189,9 @@ cp config.yaml.template config.yaml
 镜像分阶段构建 Vue 前端和 Go 后端，前端内嵌在服务中，无需另起 Nginx 容器；
 默认启动 JaySQL 与 MySQL 8.0，不依赖 Redis。首次构建需要联网下载镜像、npm 和 Go 依赖。
 
+上游遗漏的前端资源与审计页面已补齐并纳入版本控制；恢复来源、样式源码限制及补绘说明见
+[`docs/asset-recovery.md`](docs/asset-recovery.md)。镜像构建不需要访问演示站。
+
 **1. 准备配置**
 
 ```bash

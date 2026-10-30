@@ -9,7 +9,8 @@
 !www/.env.dev
 **/node_modules
 **/dist
-**/logs
+/logs
+/backend/logs
 **/media
 **/config.yaml
 **/config-linux.yaml

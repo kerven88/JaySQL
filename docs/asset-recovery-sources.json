@@ -1,0 +1,112 @@
+[
+  {
+    "path": "www/src/assets/logo/mysql.png",
+    "source": "https://www.jaysql.top/assets/tidb-akUFTkSe.js",
+    "sha256": "b15a57744cb50fcfcdd72cbeb2d941853652d9c0555d365bde7cf1fe26bce108"
+  },
+  {
+    "path": "www/src/assets/logo/postgresql.png",
+    "source": "https://www.jaysql.top/assets/tidb-akUFTkSe.js",
+    "sha256": "d29a7922b6e2d35a3e4d4f1414d1d8b878da4f05a0126a730cbdd0a06a2348d3"
+  },
+  {
+    "path": "www/src/assets/logo/oracle.png",
+    "source": "https://www.jaysql.top/assets/tidb-akUFTkSe.js",
+    "sha256": "9f53c6718cddc976edd64ccbe13dece4765f767d665767607334d1b376a17c35"
+  },
+  {
+    "path": "www/src/assets/logo/tidb.png",
+    "source": "https://www.jaysql.top/assets/tidb-BxaBadE7.png",
+    "sha256": "b7e1acf68219041257d071194a30ec21abd7fb2f10edbf3244a10a10ebfc089a"
+  },
+  {
+    "path": "www/src/assets/logo/sqlserver.png",
+    "source": "https://www.jaysql.top/assets/dbTypeLogo-BFAaVSSr.js",
+    "sha256": "b0e9c9f87fd901976f52ca8f965f671fea06e2493f72bf312464152698aad8b3"
+  },
+  {
+    "path": "www/src/assets/logo/oceanbase.png",
+    "source": "https://www.jaysql.top/assets/dbTypeLogo-BFAaVSSr.js",
+    "sha256": "c7d9941ef5f9d9925026a2ca55cb046383c603860018ad6cc00b97cd3877ba4a"
+  },
+  {
+    "path": "www/src/assets/logo/clickhouse.svg",
+    "source": "https://www.jaysql.top/assets/dbTypeLogo-BFAaVSSr.js",
+    "sha256": "f874686e8cf2d7043bccc725d26b6270fb4f4bb1509f0b9754b4bb7d64c70224"
+  },
+  {
+    "path": "www/src/assets/logo/mongodb.svg",
+    "source": "https://www.jaysql.top/assets/mongodb-BzSAA_az.svg",
+    "sha256": "9f5435c8be18a834b2c2f8c4c03f117a997646c660fd6f28e3b6869a1bc2fcc1"
+  },
+  {
+    "path": "www/src/assets/logo/doris.svg",
+    "source": "https://www.jaysql.top/assets/dbTypeLogo-BFAaVSSr.js",
+    "sha256": "53db0100177b0ee4cb6927228e1722c5566597f215d1cf364f3ec7f76ec6b1b0"
+  },
+  {
+    "path": "www/src/assets/logo/llm/openai.svg",
+    "source": "https://www.jaysql.top/assets/index-gBPtdE4L.js",
+    "sha256": "58a9bbf965ede83c3f70fa58433b82db1ac9af5749e4f2e3c1f99b985d3e52e2"
+  },
+  {
+    "path": "www/src/assets/logo/llm/gemini.svg",
+    "source": "https://www.jaysql.top/assets/index-gBPtdE4L.js",
+    "sha256": "8a53ff2ae20d4f1bedd4c3e3d1bd6798916071bf54f5927d939b7685bb718ce5"
+  },
+  {
+    "path": "www/src/assets/logo/llm/deepseek.svg",
+    "source": "https://www.jaysql.top/assets/index-gBPtdE4L.js",
+    "sha256": "4bf09f4b26edc8de5c43c4accae124c602d729f135aabb15b2f5e43ab6d788f8"
+  },
+  {
+    "path": "www/src/assets/logo/llm/qwen.svg",
+    "source": "https://www.jaysql.top/assets/index-gBPtdE4L.js",
+    "sha256": "df75ce6c5558692ebfa194f8bd84a368408b026ce6492e4da8219ec390e388f6"
+  },
+  {
+    "path": "www/src/assets/logo/llm/kimi.svg",
+    "source": "https://www.jaysql.top/assets/kimi-BS9juZ9f.svg",
+    "sha256": "4df1606286be998fcfcb308a041181b344b9a76913b1994f25f63ce379c13af4"
+  },
+  {
+    "path": "www/src/assets/logo/llm/glm.svg",
+    "source": "https://www.jaysql.top/assets/index-gBPtdE4L.js",
+    "sha256": "35b97bcb65c38874e1eaf8f8b3f41260b7b8fef97a7a93722fadc60f28dabb75"
+  },
+  {
+    "path": "www/src/assets/jaysql-login.svg",
+    "source": "https://www.jaysql.top/assets/jaysql-login-ti89xSEf.svg",
+    "sha256": "e3e5ba9b82d7f779d215976d119342646ff2ab6c5bf0fe49925ffa26e264f1b2"
+  },
+  {
+    "path": "www/src/assets/jaysql-otter.png",
+    "source": "https://www.jaysql.top/assets/jaysql-otter-C0N_NM92.png",
+    "sha256": "c627fa8dad7afc2dca8886ba70d5676668585d78bbf03c0ce3efd46daf105274"
+  },
+  {
+    "path": "www/src/assets/original2.png",
+    "source": "https://www.jaysql.top/assets/original2-Dr8RdDjg.png",
+    "sha256": "650f579af997e45aad64f53b767cc366c50bd0e6e87f30de5b5da784e7b523c9"
+  },
+  {
+    "path": "www/src/assets/wx-qrcode.jpg",
+    "source": "https://www.jaysql.top/assets/wx-qrcode-yJ1XUXJE.jpg",
+    "sha256": "2f773cb49c8d1d20f2c501e7560991dc1df930fe6260a8658bee6d406e202f79"
+  },
+  {
+    "path": "www/src/assets/gzh-logo.png",
+    "source": "https://www.jaysql.top/assets/gzh-logo-By89hd-W.png",
+    "sha256": "2ae569923be424c53534f2c231d9e9549f2446a3b73b8b0ac192d0cdc39935cb"
+  },
+  {
+    "path": "www/src/assets/gzh-qrcode.png",
+    "source": "https://www.jaysql.top/assets/gzh-qrcode-CrnB0POA.png",
+    "sha256": "305428f3060616659ae8486ae05c3a2be10ed993edbe413733ba6f944fdf607d"
+  },
+  {
+    "path": "www/src/assets/scss/recovered.css",
+    "source": "https://www.jaysql.top/assets/index-CxIvpXD1.css (global styles only)",
+    "sha256": "8bf5dbcd8f506b086c05a3e1f0dc4850f1b90179d4419da94ba9093001e0d882"
+  }
+]

@@ -7,7 +7,7 @@
         >回到首页</RouterLink
       >
     </div>
-    <img src="@/assets/original.png" alt="" />
+    <img src="@/assets/original2.png" alt="" />
   </div>
 </template>
 

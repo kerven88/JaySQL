@@ -65,7 +65,7 @@ backend/tmp/
 backend/tmp_gen/
 backend/media/
 backend/logs/
-logs/
+/logs/
 
 # ===== 前端 =====
 www/node_modules/
@@ -93,7 +93,7 @@ backend/web/dist.old-*/
 *.bak
 *.orig
 www/README.md
-assets/
+/assets/
 go.work
 go.work.sum
 

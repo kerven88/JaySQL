@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="510" viewBox="0 0 960 510" role="img" aria-labelledby="title desc">
+<title id="title">JaySQL 分层架构</title><desc id="desc">依据 README 架构表重新绘制：接入、应用、数据、执行与采集四层。</desc>
+<rect width="960" height="510" rx="16" fill="#f4f7f8"/>
+<g font-family="sans-serif" fill="#172f3a"><text x="40" y="45" font-size="26" font-weight="700">JaySQL 分层架构</text>
+<rect x="40" y="70" width="880" height="82" rx="10" fill="white" stroke="#b9d6d2"/><text x="62" y="101" font-size="20" font-weight="700" fill="#0f766e">接入层</text><text x="62" y="130" font-size="17">Vue 3 控制台 · REST API · WebSocket</text>
+<path d="M480 155v16m-5-5 5 5 5-5" fill="none" stroke="#0f766e" stroke-width="2"/>
+<rect x="40" y="176" width="880" height="82" rx="10" fill="white" stroke="#b9d6d2"/><text x="62" y="207" font-size="20" font-weight="700" fill="#0f766e">应用层</text><text x="62" y="236" font-size="17">Go / Gin / GORM · 工单 · 备份 · 监控 · 审计</text>
+<path d="M480 261v16m-5-5 5 5 5-5" fill="none" stroke="#0f766e" stroke-width="2"/>
+<rect x="40" y="282" width="880" height="82" rx="10" fill="white" stroke="#b9d6d2"/><text x="62" y="313" font-size="20" font-weight="700" fill="#0f766e">数据层</text><text x="62" y="342" font-size="17">MySQL 元数据库 · Prometheus 指标 · 存储目标</text>
+<path d="M480 367v16m-5-5 5 5 5-5" fill="none" stroke="#0f766e" stroke-width="2"/>
+<rect x="40" y="388" width="880" height="82" rx="10" fill="white" stroke="#b9d6d2"/><text x="62" y="419" font-size="20" font-weight="700" fill="#0f766e">执行与采集层</text><text x="62" y="448" font-size="17">backup-agent · 数据库工具 · node_exporter · 慢日志采集</text>
+</g></svg>
