@@ -63,30 +63,30 @@ type GetStorageTargetsService struct {
 
 func (s *GetStorageTargetsService) Run() (data any, total int64, err error) {
 	type row struct {
-		ID                    uint64                 `json:"id"`
-		Name                  string                 `json:"name"`
-		Type                  string                 `json:"type"`
-		Host                  string                 `json:"host"`
-		Port                  int                    `json:"port"`
-		BasePath              string                 `json:"base_path"`
-		SSHUser               string                 `json:"ssh_user"`
-		SSHPasswordConfigured bool                   `json:"ssh_password_configured"`
-		SSHPrivateKeyConfigured bool                 `json:"ssh_private_key_configured"`
-		S3Bucket              string                 `json:"s3_bucket"`
-		S3Endpoint            string                 `json:"s3_endpoint"`
-		S3Region              string                 `json:"s3_region"`
-		S3AccessKeyConfigured bool                   `json:"s3_access_key_configured"`
-		S3SecretKeyConfigured bool                   `json:"s3_secret_key_configured"`
-		S3ForcePathStyle      bool                   `json:"s3_force_path_style"`
-		FingerprintConfirmed  bool                   `json:"fingerprint_confirmed"`
-		ConnectionStatus      string                 `json:"connection_status"`
-		LastPrecheckAt        commonModels.LocalTime `json:"last_precheck_at"`
-		LastPrecheckResult    any                    `json:"last_precheck_result"`
-		Remark                string                 `json:"remark"`
-		CreatedAt             commonModels.LocalTime `json:"created_at"`
-		UpdatedAt             commonModels.LocalTime `json:"updated_at"`
-		CreatedBy             string                 `json:"created_by"`
-		UpdatedBy             string                 `json:"updated_by"`
+		ID                      uint64                 `json:"id"`
+		Name                    string                 `json:"name"`
+		Type                    string                 `json:"type"`
+		Host                    string                 `json:"host"`
+		Port                    int                    `json:"port"`
+		BasePath                string                 `json:"base_path"`
+		SSHUser                 string                 `json:"ssh_user"`
+		SSHPasswordConfigured   bool                   `json:"ssh_password_configured"`
+		SSHPrivateKeyConfigured bool                   `json:"ssh_private_key_configured"`
+		S3Bucket                string                 `json:"s3_bucket"`
+		S3Endpoint              string                 `json:"s3_endpoint"`
+		S3Region                string                 `json:"s3_region"`
+		S3AccessKeyConfigured   bool                   `json:"s3_access_key_configured"`
+		S3SecretKeyConfigured   bool                   `json:"s3_secret_key_configured"`
+		S3ForcePathStyle        bool                   `json:"s3_force_path_style"`
+		FingerprintConfirmed    bool                   `json:"fingerprint_confirmed"`
+		ConnectionStatus        string                 `json:"connection_status"`
+		LastPrecheckAt          commonModels.LocalTime `json:"last_precheck_at"`
+		LastPrecheckResult      any                    `json:"last_precheck_result"`
+		Remark                  string                 `json:"remark"`
+		CreatedAt               commonModels.LocalTime `json:"created_at"`
+		UpdatedAt               commonModels.LocalTime `json:"updated_at"`
+		CreatedBy               string                 `json:"created_by"`
+		UpdatedBy               string                 `json:"updated_by"`
 	}
 	var list []row
 	tx := global.App.DB.Table("insight_backup_storage_targets").Select(`
@@ -198,24 +198,24 @@ func (s *CreateStorageTargetService) Run() (*backupModels.InsightBackupStorageTa
 		return nil, err
 	}
 	target := backupModels.InsightBackupStorageTargets{
-		Name:             strings.TrimSpace(s.Name),
-		Type:             commonModels.EnumType(tp),
-		Host:             strings.TrimSpace(s.Host),
-		Port:             s.Port,
-		BasePath:         normalizeBasePath(s.BasePath),
-		SSHUser:          strings.TrimSpace(s.SSHUser),
-		SSHPassword:      "",
-		SSHPrivateKey:    "",
-		S3Endpoint:       strings.TrimSpace(s.S3Endpoint),
-		S3Region:         strings.TrimSpace(s.S3Region),
-		S3Bucket:         strings.TrimSpace(s.S3Bucket),
-		S3AccessKey:      "",
-		S3SecretKey:      "",
-		ConnectionStatus: commonModels.EnumType(backupModels.StorageTargetConnStatusUnknown),
+		Name:                 strings.TrimSpace(s.Name),
+		Type:                 commonModels.EnumType(tp),
+		Host:                 strings.TrimSpace(s.Host),
+		Port:                 s.Port,
+		BasePath:             normalizeBasePath(s.BasePath),
+		SSHUser:              strings.TrimSpace(s.SSHUser),
+		SSHPassword:          "",
+		SSHPrivateKey:        "",
+		S3Endpoint:           strings.TrimSpace(s.S3Endpoint),
+		S3Region:             strings.TrimSpace(s.S3Region),
+		S3Bucket:             strings.TrimSpace(s.S3Bucket),
+		S3AccessKey:          "",
+		S3SecretKey:          "",
+		ConnectionStatus:     commonModels.EnumType(backupModels.StorageTargetConnStatusUnknown),
 		FingerprintConfirmed: false,
-		Remark:           strings.TrimSpace(s.Remark),
-		CreatedBy:        currentUsername(s.C),
-		UpdatedBy:        currentUsername(s.C),
+		Remark:               strings.TrimSpace(s.Remark),
+		CreatedBy:            currentUsername(s.C),
+		UpdatedBy:            currentUsername(s.C),
 	}
 	if s.S3ForcePathStyle != nil {
 		target.S3ForcePathStyle = *s.S3ForcePathStyle
@@ -277,18 +277,18 @@ func (s *UpdateStorageTargetService) Run() error {
 		return err
 	}
 	updates := map[string]any{
-		"name":         strings.TrimSpace(s.Name),
-		"type":         tp,
-		"host":         strings.TrimSpace(s.Host),
-		"port":         s.Port,
-		"base_path":    normalizeBasePath(s.BasePath),
-		"ssh_user":     strings.TrimSpace(s.SSHUser),
-		"s3_endpoint":  strings.TrimSpace(s.S3Endpoint),
-		"s3_region":    strings.TrimSpace(s.S3Region),
-		"s3_bucket":    strings.TrimSpace(s.S3Bucket),
-		"remark":       strings.TrimSpace(s.Remark),
-		"updated_by":   currentUsername(s.C),
-		"updated_at":   commonModels.LocalTime(nowLocalTime()),
+		"name":        strings.TrimSpace(s.Name),
+		"type":        tp,
+		"host":        strings.TrimSpace(s.Host),
+		"port":        s.Port,
+		"base_path":   normalizeBasePath(s.BasePath),
+		"ssh_user":    strings.TrimSpace(s.SSHUser),
+		"s3_endpoint": strings.TrimSpace(s.S3Endpoint),
+		"s3_region":   strings.TrimSpace(s.S3Region),
+		"s3_bucket":   strings.TrimSpace(s.S3Bucket),
+		"remark":      strings.TrimSpace(s.Remark),
+		"updated_by":  currentUsername(s.C),
+		"updated_at":  commonModels.LocalTime(nowLocalTime()),
 	}
 	if s.S3ForcePathStyle != nil {
 		updates["s3_force_path_style"] = *s.S3ForcePathStyle
@@ -442,6 +442,9 @@ func validateStorageTargetForm(tp string, isCreate bool, host string, port int, 
 		backupModels.StorageTargetTypeS3Minio,
 		backupModels.StorageTargetTypeCOSTencent,
 		backupModels.StorageTargetTypeOBSHuawei:
+		if err := validateObjectStoragePrefix(basePath); err != nil {
+			return err
+		}
 		if strings.TrimSpace(s3Endpoint) == "" {
 			return fmt.Errorf("Endpoint 不能为空（阿里云示例：oss-cn-hangzhou.aliyuncs.com；腾讯云示例：cos.ap-beijing.myqcloud.com）")
 		}
@@ -474,4 +477,20 @@ func normalizeBasePath(p string) string {
 		return "/"
 	}
 	return p
+}
+
+// validateObjectStoragePrefix prevents ambiguous or traversing object paths.
+func validateObjectStoragePrefix(prefix string) error {
+	if len(prefix) > 1024 {
+		return fmt.Errorf("对象路径前缀不能超过 1024 字节")
+	}
+	if strings.ContainsAny(prefix, "\\\r\n\t") || strings.Contains(prefix, "://") {
+		return fmt.Errorf("对象路径前缀只填写桶内路径，例如 backups/mysql，不包含 URL 或反斜杠")
+	}
+	for _, part := range strings.Split(prefix, "/") {
+		if part == "." || part == ".." {
+			return fmt.Errorf("对象路径前缀不能包含 . 或 .. 路径段")
+		}
+	}
+	return nil
 }

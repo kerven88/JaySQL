@@ -28,10 +28,19 @@ type teeBackupRunLogger struct {
 	path  string
 }
 
-func (t *teeBackupRunLogger) Infof(format string, args ...any) { t.local.Infof(format, args...); t.writeExtra("INFO", format, args...) }
-func (t *teeBackupRunLogger) Warnf(format string, args ...any) { t.local.Warnf(format, args...); t.writeExtra("WARN", format, args...) }
-func (t *teeBackupRunLogger) Errorf(format string, args ...any) { t.local.Errorf(format, args...); t.writeExtra("ERROR", format, args...) }
-func (t *teeBackupRunLogger) Path() string                      { return t.path }
+func (t *teeBackupRunLogger) Infof(format string, args ...any) {
+	t.local.Infof(format, args...)
+	t.writeExtra("INFO", format, args...)
+}
+func (t *teeBackupRunLogger) Warnf(format string, args ...any) {
+	t.local.Warnf(format, args...)
+	t.writeExtra("WARN", format, args...)
+}
+func (t *teeBackupRunLogger) Errorf(format string, args ...any) {
+	t.local.Errorf(format, args...)
+	t.writeExtra("ERROR", format, args...)
+}
+func (t *teeBackupRunLogger) Path() string { return t.path }
 func (t *teeBackupRunLogger) Close() error {
 	if wc, ok := t.extra.(io.WriteCloser); ok {
 		_ = wc.Close()
@@ -190,6 +199,8 @@ func (l *backupRunLogger) Errorf(format string, args ...any) {
 //
 // RunID 必须始终保留在目录名里：它是全局唯一且永不变化的锚点，序号只作可读性前缀。
 type BackupRunDirSpec struct {
+	ObjectPrefix string
+
 	SourceInstanceID uint64
 	InstanceBizID    string
 	TaskID           string
@@ -216,7 +227,7 @@ func (s BackupRunDirSpec) runSegment() string {
 
 // RelDir 返回批次目录相对存储目标根目录的斜杠路径
 func (s BackupRunDirSpec) RelDir() string {
-	return path.Join(s.instanceSegment(), sanitizePathSegment(s.TaskID, "task"), s.runSegment())
+	return path.Join(strings.Trim(s.ObjectPrefix, "/"), s.instanceSegment(), sanitizePathSegment(s.TaskID, "task"), s.runSegment())
 }
 
 // RelTaskDir 返回「实例/任务」两级目录（不含批次），用于扫描该任务的全部批次

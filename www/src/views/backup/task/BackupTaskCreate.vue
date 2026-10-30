@@ -192,12 +192,13 @@
                     </a-button>
                   </a-form-item>
 
-                  <a-form-item label="备份目录">
+                  <a-form-item :label="isObjectStorageTarget ? '本地备份工作目录' : '备份目录'" :extra="outputDirHelp">
                     <a-input
                       v-model:value="formData.output_dir"
-                      :placeholder="isPhysicalDriver ? physicalOutputDirPlaceholder : '填写相对于存储目标备份根路径下的子目录，留空则按实例/任务/批次自动建子目录'"
+                      :placeholder="isObjectStorageTarget ? '例如 /data/jaysql/backups；留空使用服务默认目录' : isPhysicalDriver ? physicalOutputDirPlaceholder : '填写目标根路径下的子目录；可留空'"
                     />
                   </a-form-item>
+                  <a-alert v-if="isObjectStorageTarget" type="info" show-icon message="最终存储位置（路径示例）" :description="storageSummary" style="margin-bottom: 16px; overflow-wrap: anywhere" />
                   <a-collapse v-model:activeKey="advancedOpen" ghost class="advanced-options-collapse">
                     <a-collapse-panel key="advanced" header="高级选项">
                   <a-form-item label="并行数">
@@ -885,11 +886,12 @@ const joinStoragePath = (...segments) => {
   return parts.join('/') || ''
 }
 
-// 备份目录必须位于所选存储目标的备份根路径（base_path）之下：
-// - 绝对路径：必须以根路径开头，否则报错并给出友好提示；
-// - 相对路径：自动拼接为「根路径/相对路径」；
-// - 留空：沿用默认值（由服务端按实例/任务/批次自动建子目录）。
-const resolveOutputDirAgainstTarget = () => {
+const selectedStorageTarget = computed(() => storageTargets.value.find((t) => t.id === formData.storage_target_id))
+const isObjectStorageTarget = computed(() => !!selectedStorageTarget.value && String(selectedStorageTarget.value.type || '').toUpperCase() !== 'LOCAL_SERVER')
+const outputDirHelp = computed(() => isObjectStorageTarget.value
+  ? '执行备份时使用的本地工作目录，用于元数据、日志及需要落盘的产物；不会作为 S3 子目录。填写执行环境可写的绝对路径，留空使用服务默认目录。Docker 部署请确认对应挂载与权限；直传模式不一定在此生成完整备份文件。'
+  : 'SSH 存储目标可填写备份根路径下的相对子目录；填写绝对路径时须位于目标根路径下。留空使用默认目录。')
+const resolveLocalOutputDirAgainstTarget = () => {
   const raw = `${formData.output_dir || ''}`.trim()
   if (!raw) {
     return { ok: true, value: '' }
@@ -912,9 +914,27 @@ const resolveOutputDirAgainstTarget = () => {
   return { ok: true, value: `${normalizedBase}/${raw.replace(/^\/+/g, '')}` }
 }
 
+const resolveOutputDirAgainstTarget = () => {
+  if (!isObjectStorageTarget.value) return resolveLocalOutputDirAgainstTarget()
+  const raw = `${formData.output_dir || ''}`.trim()
+  if (raw && !raw.startsWith('/')) {
+    return { ok: false, error: '本地备份工作目录须为绝对路径，例如 /data/jaysql/backups；也可留空使用默认目录。S3 最终路径由系统生成。' }
+  }
+  if (raw === '/') return { ok: false, error: '请填写专用的本地备份工作目录，例如 /data/jaysql/backups，不能使用根目录 /' }
+  return { ok: true, value: raw }
+}
+
 const storageSummary = computed(() => {
   const target = storageTargetOptions.value.find((t) => t.value === formData.storage_target_id)?.raw
   const suffix = `${formData.output_dir || ''}`.trim()
+  if (isObjectStorageTarget.value) {
+    const bucket = selectedStorageTarget.value.s3_bucket || 'Bucket'
+    const prefix = String(selectedStorageTarget.value.base_path || '').replace(/^\/+|\/+$/g, '')
+    const root = `s3://${bucket}/${prefix ? prefix + '/' : ''}`
+    return isPhysicalDriver.value
+      ? `${root}（由备份工具组织仓库；实际仓库路径见预校验结果及备份集。本地工作目录不作为对象前缀。）`
+      : `${root}实例ID/任务ID/执行批次/文件名（系统自动生成；批次示例：000001-123。本地工作目录不作为对象前缀。）`
+  }
   if (isPhysicalDriver.value) {
     const targetType = String(target?.type || '').toUpperCase()
     const physicalSubDir = isMySQLPhysicalDriver.value ? 'xtrabackup/mysql' : 'pgbackrest/postgresql'

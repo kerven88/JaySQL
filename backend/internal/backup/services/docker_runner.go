@@ -242,7 +242,7 @@ func resolveBackupOutputBaseDir(input string) (string, error) {
 		return absMediaBackupDir()
 	}
 	if !filepath.IsAbs(input) {
-		return "", fmt.Errorf("备份目录必须填写主机绝对路径")
+		return "", fmt.Errorf("本地备份工作目录必须填写绝对路径，例如 /data/jaysql/backups；可留空使用默认目录，此字段不是 S3 对象路径")
 	}
 	base := filepath.Clean(strings.TrimSpace(input))
 	if base == "." || base == string(os.PathSeparator) {

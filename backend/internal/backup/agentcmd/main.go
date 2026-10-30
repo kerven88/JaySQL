@@ -715,9 +715,8 @@ func transferArtifactToStorageTarget(job *agentJob, localArtifactPath string, ar
 	if targetType == "" {
 		targetType = "LOCAL_SERVER"
 	}
-	// 注意：base_path 只对 LOCAL_SERVER 有意义（备份中心机上的备份根目录）；
-	// 对象存储以 bucket 为根，服务端创建/校验时也不要求该字段，
-	// 因此不能在这里对所有类型统一拦截，否则 OSS/COS/OBS/S3 任务会 100% 失败。
+	// LOCAL_SERVER 的 base_path 是远端目录；对象存储的 base_path 是可选的桶内前缀。
+	// 对象存储允许留空，并将完整 Key 保存到备份集引用。
 	runDirSpec := services.BackupRunDirSpec{
 		SourceInstanceID: job.SourceInstanceID,
 		InstanceBizID:    job.InstanceBizID,
@@ -848,6 +847,7 @@ func transferArtifactToStorageTarget(job *agentJob, localArtifactPath string, ar
 		fmt.Fprintf(os.Stderr, "storage transfer ok: %s -> %s\n", localPath, remoteTarget)
 		return relArtifactPath, stID, nil
 	case "OSS_ALIYUN", "S3_MINIO", "COS_TENCENT", "OBS_HUAWEI":
+		relArtifactPath = objectStorageRunDirSpec(job).RelPath(artifactName)
 		// 对象存储：本地产物走并发分片上传；大文件（XTRABACKUP/PG_BACKREST）
 		// 应优先命中 DirectStream 零落盘路径，不会走到这里。
 		if err := uploadLocalFileToObjectStorage(job, localPath, relArtifactPath); err != nil {
@@ -1157,7 +1157,12 @@ func objectStorageClient(st *agentStorageTarget) (*services.S3Client, error) {
 }
 
 func objectStorageRunDirSpec(job *agentJob) services.BackupRunDirSpec {
+	prefix := ""
+	if job.StorageTarget != nil {
+		prefix = strings.Trim(job.StorageTarget.BasePath, "/")
+	}
 	return services.BackupRunDirSpec{
+		ObjectPrefix:     prefix,
 		SourceInstanceID: job.SourceInstanceID,
 		InstanceBizID:    job.InstanceBizID,
 		TaskID:           job.TaskID,

@@ -148,9 +148,13 @@
               <a-input v-model:value="editorForm.s3_region" :placeholder="regionPlaceholder(editorForm.type)" />
             </a-form-item>
           </div>
-          <a-form-item label="Bucket" name="s3_bucket">
+          <a-form-item label="Bucket" name="s3_bucket" extra="只填写桶名，无需手动创建子目录。可在下方配置对象路径前缀。">
             <a-input v-model:value="editorForm.s3_bucket" placeholder="例如 my-backup-bucket" />
           </a-form-item>
+          <a-form-item label="对象路径前缀（可选）" name="base_path" extra="例如 backups/mysql；不含桶名或 s3://，无需预建目录。留空直接按实例/任务/批次组织。修改前缀仅影响后续备份；已有备份仍使用保存的对象路径。">
+            <a-input v-model:value="editorForm.base_path" placeholder="例如 backups/mysql" :maxlength="1024" />
+          </a-form-item>
+          <a-alert type="info" show-icon style="margin-bottom: 16px" message="备份最终存储位置" :description="`逻辑备份自动写入 s3://${editorForm.s3_bucket || 'Bucket'}/${String(editorForm.base_path || '').replace(/^\/+|\/+$/g, '') ? String(editorForm.base_path).replace(/^\/+|\/+$/g, '') + '/' : ''}实例ID/任务ID/执行批次/文件名；本地工作目录不作为 S3 前缀。物理备份由所选工具组织仓库，实际位置见任务预校验及备份集。`" />
           <a-form-item label="Path-Style" name="s3_force_path_style" extra="Amazon S3、阿里云 OSS 默认保持关闭，使用虚拟主机寻址；MinIO / IP 地址端点通常需手动开启，其他 S3 兼容服务按其要求设置">
             <a-switch v-model:checked="editorForm.s3_force_path_style" />
           </a-form-item>
@@ -599,6 +603,10 @@ const editorRules = computed(() => {
   }
   return {
     ...base,
+    base_path: [{ validator: async (_r, value) => {
+      const prefix = String(value || '').trim()
+      if (prefix.length > 1024 || /[\\\r\n\t]/.test(prefix) || prefix.includes('://') || prefix.split('/').some((p) => p === '.' || p === '..')) throw new Error('填写桶内前缀，例如 backups/mysql；不能包含 URL、反斜杠或 .、.. 路径段')
+    }, trigger: 'blur' }],
     s3_endpoint: [{ required: true, message: '请输入 Endpoint', trigger: 'blur' }],
     s3_region: [{ required: true, message: '请输入 Region', trigger: 'blur' }],
     s3_bucket: [{ required: true, message: '请输入 Bucket 名称', trigger: 'blur' }],
