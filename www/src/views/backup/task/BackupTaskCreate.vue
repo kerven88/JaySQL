@@ -192,12 +192,23 @@
                     </a-button>
                   </a-form-item>
 
-                  <a-form-item :label="isObjectStorageTarget ? '本地备份工作目录' : '备份目录'" :extra="outputDirHelp">
+                  <a-form-item :label="isObjectStorageTarget ? '执行节点工作目录（数据库主机 / Agent）' : '备份目录'" :extra="outputDirHelp">
                     <a-input
                       v-model:value="formData.output_dir"
-                      :placeholder="isObjectStorageTarget ? '例如 /data/jaysql/backups；留空使用服务默认目录' : isPhysicalDriver ? physicalOutputDirPlaceholder : '填写目标根路径下的子目录；可留空'"
+                      :placeholder="isObjectStorageTarget ? '例如 /data/backup；留空使用默认工作目录' : isPhysicalDriver ? physicalOutputDirPlaceholder : '填写目标根路径下的子目录；可留空'"
                     />
                   </a-form-item>
+                  <a-alert type="info" show-icon style="margin-bottom: 16px">
+                    <template #message>备份执行位置：数据库主机 {{ currentInstance?.hostname || '（请先选择数据源）' }}</template>
+                    <template #description>
+                      工作目录需在该主机的 Agent 执行环境中创建并授权，不是 JaySQL 服务所在机器的目录。Agent 若以容器运行，填写 Agent 容器内路径。最终执行节点以预校验结果为准。
+                      <div v-if="agentInstallNodeId" style="margin-top: 8px">
+                        <a :href="router.resolve({ path: `/backup/agent-install/${agentInstallNodeId}` }).href" target="_blank" rel="noopener noreferrer">安装 / 修复 Agent（新窗口）</a>
+                        <span> · 节点 {{ agentInstallNodeId }}；完成后返回此页重新预校验</span>
+                      </div>
+                      <div v-else>尚未匹配到节点。请先运行预校验以解析 / 创建执行节点，再使用此处安装入口。</div>
+                    </template>
+                  </a-alert>
                   <a-alert v-if="isObjectStorageTarget" type="info" show-icon message="最终存储位置（路径示例）" :description="storageSummary" style="margin-bottom: 16px; overflow-wrap: anywhere" />
                   <a-collapse v-model:activeKey="advancedOpen" ghost class="advanced-options-collapse">
                     <a-collapse-panel key="advanced" header="高级选项">
@@ -888,9 +899,16 @@ const joinStoragePath = (...segments) => {
 
 const selectedStorageTarget = computed(() => storageTargets.value.find((t) => t.id === formData.storage_target_id))
 const isObjectStorageTarget = computed(() => !!selectedStorageTarget.value && String(selectedStorageTarget.value.type || '').toUpperCase() !== 'LOCAL_SERVER')
+const agentInstallNodeId = computed(() => {
+  const resolved = uiState.precheckResult.resolved
+  const actualId = resolved?.executor_node_id || (uiState.precheckResult.items || []).find((item) => item?.detail?.node_id && String(item.item_key || '').includes('executor_node'))?.detail?.node_id
+  if (actualId) return actualId
+  const host = String(currentInstance.value?.hostname || '').trim().toLowerCase()
+  return nodes.value.find((node) => host && String(node.host || '').trim().toLowerCase() === host)?.id || null
+})
 const outputDirHelp = computed(() => isObjectStorageTarget.value
-  ? '执行备份时使用的本地工作目录，用于元数据、日志及需要落盘的产物；不会作为 S3 子目录。填写执行环境可写的绝对路径，留空使用服务默认目录。Docker 部署请确认对应挂载与权限；直传模式不一定在此生成完整备份文件。'
-  : 'SSH 存储目标可填写备份根路径下的相对子目录；填写绝对路径时须位于目标根路径下。留空使用默认目录。')
+  ? `此目录属于数据库主机 ${currentInstance.value?.hostname || '（待选择）'} 上的备份 Agent，不是 JaySQL 服务器目录。用于元数据、日志及需要落盘的产物，不作为 S3 前缀。填写 Agent 执行环境中可写的绝对路径；留空使用默认工作目录。Agent 容器部署时需配置该容器的挂载。直传模式不一定生成本地完整备份文件。`
+  : 'SSH 存储目标可填写目标根路径下的相对子目录；绝对路径须位于目标根路径下。执行工作目录还需在数据库主机 / Agent 环境中可写；不是只在 JaySQL 容器挂载即可。')
 const resolveLocalOutputDirAgainstTarget = () => {
   const raw = `${formData.output_dir || ''}`.trim()
   if (!raw) {
