@@ -14,7 +14,8 @@ RUN go mod download
 COPY backend/ ./
 RUN rm -rf web/dist
 COPY --from=frontend /src/www/dist/ ./web/dist/
-RUN CGO_ENABLED=0 go build -trimpath -o /out/goinsight ./cmd
+RUN CGO_ENABLED=0 go build -trimpath -o /out/goinsight ./cmd \
+    && CGO_ENABLED=0 go build -trimpath -o /out/backup-agent ./internal/backup/agentcmd
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata curl \
@@ -24,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && chown -R jaysql:jaysql /opt/app/goinsight
 WORKDIR /opt/app/goinsight
 COPY --from=backend /out/goinsight ./goinsight
+COPY --from=backend /out/backup-agent /usr/local/bin/backup-agent
 USER jaysql
 EXPOSE 8083
 ENTRYPOINT ["./goinsight"]

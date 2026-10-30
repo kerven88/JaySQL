@@ -276,6 +276,29 @@ Docker Desktop 可用 `host.docker.internal` 访问宿主机；Linux 可在 `jay
 node_exporter 及备份 agent / mysqldump / pg_dump / xtrabackup 按相应功能要求部署到被管主机，
 本 Compose 不会安装这些远程组件。被管数据库、SSH 和存储目标也必须对应用容器网络可达。
 
+#### 数据库 SSH 通过，但备份执行节点 OFFLINE
+
+数据库连接、SSH 连接和备份 Agent 心跳是独立检查。SSH 测试成功不代表 Agent 已安装或能回连平台。Docker 镜像同时打包 JaySQL 和 `/usr/local/bin/backup-agent`，供平台通过 SSH 下发到备份执行主机；该 Agent 与镜像使用相同的 CPU 架构。异构主机需自行提供对应架构的 Agent，并通过 `GOINSIGHT_AGENT_BINARY` 指定容器内的二进制路径。
+
+升级旧镜像后先重建应用：
+
+```bash
+git pull
+docker compose up -d --build jaysql
+docker compose exec jaysql sh -c 'test -s /usr/local/bin/backup-agent && ls -l /usr/local/bin/backup-agent'
+```
+
+然后在备份节点管理中检查平台地址、安装/修复 Agent，再重新预校验。平台地址必须是执行主机可访问的地址，例如 `http://<JaySQL宿主机IP>:8083`（使用实际发布端口或域名），不能填写容器内部服务名或该主机无法访问的 `localhost`。数据库主机需允许访问此地址。SSH 用户还需具备安装目录写权限和服务管理权限；“SSH 验证通过”不验证这些权限。
+
+若仍离线，在执行主机检查实际节点服务及日志（以下以节点 ID 1 的默认服务名为例）：
+
+```bash
+sudo systemctl status goinsight-backup-agent-1 --no-pager
+sudo journalctl -u goinsight-backup-agent-1 -n 100 --no-pager
+```
+
+Agent 运行在数据库主机时，任务的本地工作目录也必须在该执行主机中可写；仅在 JaySQL 容器中挂载目录不足以解决远端执行目录权限。
+
 Compose 配置语法和依赖健康检查说明见 [Docker 官方文档](https://docs.docker.com/reference/compose-file/services/)。
 
 ### 初始化与登录
