@@ -238,6 +238,53 @@ MySQL 健康检查通过后才会启动应用，首次启动自动建表和初�
 修改 `.env` 中的 `JAYSQL_PORT` 可调整宿主机端口，容器内仍监听 `8083`。
 前置 HTTPS 反向代理时，可将 Compose 的端口映射改成 `127.0.0.1:8083:8083`。
 
+**备份工作目录挂载（可选）**
+
+需要将本地备份工作目录持久化到宿主机时，可在 `jaysql` 服务的 `volumes` 中增加 `./jaysql_backup:/data/backup`。例如使用以下绑定挂载配置（替换该服务原有的 `volumes`，不要重复添加同名配置）：
+
+```yaml
+services:
+  jaysql:
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /opt/app/goinsight/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./jaysql_media:/opt/app/goinsight/media
+      - ./jaysql_logs:/opt/app/goinsight/logs
+      - ./jaysql_backup:/data/backup
+```
+
+| 宿主机目录（相对于 compose.yaml 所在目录） | 容器内目录 | 用途 |
+| :--- | :--- | :--- |
+| `./jaysql_media` | `/opt/app/goinsight/media` | 上传文件与默认工作数据 |
+| `./jaysql_logs` | `/opt/app/goinsight/logs` | 应用日志 |
+| `./jaysql_backup` | `/data/backup` | 自定义本地备份工作目录 |
+
+仓库默认配置的 media、logs 使用命名卷；上述示例改用宿主机绑定目录。已有部署若只增加备份挂载，应保留原来的 media、logs 挂载，否则旧数据不会自动迁入新目录。
+
+在 Linux 宿主机上先创建目录并设置权限。镜像默认运行用户为 `jaysql`（UID 10001）；可以用 `docker compose exec jaysql id` 确认实际 UID/GID。以下以 UID/GID 均为 10001 为例，只为此次新增的备份目录授权：
+
+```bash
+mkdir -p ./jaysql_backup
+sudo chown 10001:10001 ./jaysql_backup
+sudo chmod 750 ./jaysql_backup
+docker compose up -d --build jaysql
+
+# 以容器默认运行用户验证写权限
+docker compose exec jaysql sh -c 'id && touch /data/backup/.write-test && rm /data/backup/.write-test'
+```
+
+若同时新建了绑定挂载的 media、logs 目录，也需为它们设置对应运行用户的写权限；`chmod 755` 不会让非所有者获得写权限。
+
+任务由 JaySQL 容器本地执行时，在页面的“本地备份工作目录”填写 **`/data/backup`**，不是 `./jaysql_backup` 或宿主机绝对路径。文件实际保存在宿主机的 `./jaysql_backup`。仅增加挂载不会自动改变任务工作目录，需在任务中明确填写。
+
+**以实际执行节点为准：**如果预校验显示由数据库主机上的独立 Agent 执行，页面中的工作目录属于该 Agent 的执行环境。此时需要在该主机创建目录并授权给 Agent 运行用户；若 Agent 本身运行在容器内，则在 Agent 容器配置挂载。JaySQL 服务的上述挂载不会同步到远端 Agent。
+
+本地工作目录用于元数据、日志和需要落盘的备份产物，**不决定 S3 最终路径**。S3 存储位置由 Bucket 和“对象路径前缀”决定；直传模式不一定在本地保存完整备份文件。
+
 **3. 持久化与日常维护**
 
 | 卷 | 内容 |
