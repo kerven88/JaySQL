@@ -272,7 +272,7 @@ docker compose down
 Docker Desktop 可用 `host.docker.internal` 访问宿主机；Linux 可在 `jaysql` 服务增加
 `extra_hosts: ["host.docker.internal:host-gateway"]`，并确保数据库监听地址与授权允许容器访问。
 
-需要主机资源指标时，将配置中的 `monitor.prometheus_url` 改为容器可达的 Prometheus 地址；
+需要主机资源指标时，按[主机指标采集](#主机指标采集prometheus--node_exporter)章节配置，并将 `monitor.prometheus_url` 改为容器可达的 Prometheus 地址；
 node_exporter 及备份 agent / mysqldump / pg_dump / xtrabackup 按相应功能要求部署到被管主机，
 本 Compose 不会安装这些远程组件。被管数据库、SSH 和存储目标也必须对应用容器网络可达。
 
@@ -345,6 +345,228 @@ jaysql/
 
 * **大模型凭据（API Key / 端点）不写配置文件**，存在 `insight_llm_providers` 表里并做 AES-256-GCM 加密
 * **实例密码同样加密入库**，不放明文配置；`config.yaml` 已在 `.gitignore` 中，请勿提交
+
+---
+
+## 主机指标采集（Prometheus + node_exporter）
+
+CPU、内存、磁盘、IO、主机网络等基础指标的链路为：
+**node_exporter 暴露主机指标 → Prometheus 定时抓取 → JaySQL 查询 Prometheus**。
+数据库引擎指标仍可选择“直连”。默认 Compose 不包含 Prometheus，需要另行部署或接入已有服务。
+
+以下以数据库所在的 **Linux 主机 `192.168.50.137`** 为例，请替换为实际地址。
+
+### 1. 在被监控主机启动 node_exporter
+
+在 `192.168.50.137` 上执行（需已安装 Docker）：
+
+```bash
+docker run -d \
+  --name node-exporter \
+  --restart unless-stopped \
+  --network host \
+  --pid host \
+  -v "/:/host:ro,rslave" \
+  quay.io/prometheus/node-exporter:v1.9.1 \
+  --path.rootfs=/host
+```
+
+此配置用于采集 Linux 宿主机，不能用于采集 macOS 本机资源。
+仅允许 Prometheus 服务器访问被监控主机的 TCP `9100` 端口。
+在 **Prometheus 服务器上**验证连通性：
+
+```bash
+curl --fail http://192.168.50.137:9100/metrics
+```
+
+应返回包含 `node_cpu_seconds_total`、`node_memory_MemAvailable_bytes` 等指标的文本。
+也可使用仓库提供的 [systemd 服务与部署脚本](scripts/prometheus/) 安装 node_exporter。
+
+### 2. 配置 Prometheus 抓取主机
+
+在 Prometheus 的 `prometheus.yml` 中，将以下任务追加到现有的 `scrape_configs` 列表，
+不要重复创建顶层 `scrape_configs` 字段，也不要覆盖已有任务：
+
+```yaml
+scrape_configs:
+  - job_name: node-137
+    scrape_interval: 15s
+    static_configs:
+      - targets:
+          - "192.168.50.137:9100"
+        labels:
+          instance: "dev-mysql-host"
+```
+
+* `targets`：node_exporter 地址，端口为 `9100`，不是 MySQL 的 `3306`。
+* `instance`：JaySQL 用来匹配主机的标签，必须与页面中的“Prometheus 目标标识”对应。
+* `job_name`：可以自定义为 `node-137`、`node-prod` 等，在同一配置文件中需唯一。
+  JaySQL 的主机指标查询按 `instance` 匹配，不要求任务名为 `node`。
+* 不同主机使用不同的 `instance` 标识，避免多个主机的数据被合并。
+
+使用 Prometheus 随附的 `promtool check config <配置文件路径>` 校验配置，
+然后重启 Prometheus；如果已开启 `--web.enable-lifecycle`，也可以向 `/-/reload` 发送 POST 重载。
+在 Prometheus 查询页面执行：
+
+```promql
+up{job="node-137", instance="dev-mysql-host"}
+```
+
+结果应为 **1**。若为 `0`，检查 exporter、端口与防火墙；若没有结果，检查任务是否加载及标签是否一致。
+再查询 `node_memory_MemTotal_bytes{instance="dev-mysql-host"}`，确认主机指标实际存在。
+
+### 3. 配置 JaySQL 的 Prometheus 地址
+
+修改 JaySQL 使用的 `config.yaml`（合并到现有 `monitor` 段）：
+
+```yaml
+monitor:
+    prometheus_url: "http://<Prometheus服务器IP>:9090"
+    prometheus_timeout_seconds: 5
+```
+
+如果 Prometheus 与 JaySQL 处于同一个 Docker Compose 网络，且服务名为 `prometheus`，
+可使用 `http://prometheus:9090`。**容器内的 `127.0.0.1` 指向容器自身**，
+宿主机或其他容器中的 Prometheus 不能直接用 `127.0.0.1:9090` 访问。
+Prometheus 的监听地址和防火墙也必须允许 JaySQL 容器访问。
+
+地址读取优先级为 `GOINSIGHT_PROMETHEUS_URL` > `PROMETHEUS_URL` > `monitor.prometheus_url`，
+若修改文件后未生效，检查是否被环境变量覆盖。
+
+Compose 部署修改配置后执行：
+
+```bash
+docker compose up -d --force-recreate jaysql
+```
+
+从 JaySQL 容器中验证 Prometheus 就绪与查询接口（地址替换为实际配置值）：
+
+```bash
+docker compose exec jaysql curl --fail http://<Prometheus服务器IP>:9090/-/ready
+docker compose exec jaysql curl --fail --get \
+  --data-urlencode 'query=up{job="node-137",instance="dev-mysql-host"}' \
+  http://<Prometheus服务器IP>:9090/api/v1/query
+```
+
+### 4. 填写页面上的监控对象
+
+进入 **监控告警 → 监控配置 → 监控对象 → 编辑**：
+
+| 字段 | 示例值 |
+| :--- | :--- |
+| 启用监控 | 开启 |
+| Prometheus 目标标识 | `dev-mysql-host` |
+| 基础资源采集来源 | Prometheus |
+| 引擎指标采集来源 | 直连 |
+| 指标模板 | MySQL 默认模板（其他引擎选择对应模板） |
+
+目标标识与第 2 步的 `instance` 标签保持一致，不填写 Prometheus URL 或数据库地址 `192.168.50.137:3306`。
+如果目标标识留空，程序会退回使用登记的数据库主机地址匹配；此时 Prometheus 标签也必须对应。
+保存后等待几个采集周期，再刷新监控详情；CPU、IO、网络速率需要至少两个样本才能计算。
+
+| 页面现象 | 排查方向 |
+| :--- | :--- |
+| Prometheus 已配置但当前不可用 | 检查 JaySQL 容器到 Prometheus 的网络、URL、监听地址及环境变量覆盖 |
+| Prometheus 可用，但主机指标无数据 | 检查 `instance` 标签、`up` 是否为 1、是否存在 `node_*` 指标 |
+| 数据库指标正常，CPU / 内存为空 | 直连采集正常，但主机采集链路仍需按上述步骤接通 |
+
+参考：[node_exporter 容器部署](https://github.com/prometheus/node_exporter#docker)、
+[Prometheus 主机指标采集指南](https://prometheus.io/docs/guides/node-exporter/)。
+
+---
+
+## Telegram 通知与 Markdown 消息模板
+
+在 **监控告警 → 告警配置 → 通知渠道 → 新建通知渠道** 中选择 **Telegram**：
+
+| 字段 | 说明 |
+| :--- | :--- |
+| Bot Token | 从 Telegram `@BotFather` 获取，保存时加密，编辑时以掩码显示 |
+| Chat ID | 接收会话的数字 ID（群组通常为负数），或公开频道的 `@channelname` |
+| 群话题 ID | 可选，仅发送到 Telegram 群的指定话题时填写正整数 |
+| Bot API 地址 | 可选，默认 `https://api.telegram.org`；可配置可达的 Bot API 网关 |
+
+向个人发送前，先在 Telegram 中启动机器人；向群或频道发送时，将机器人加入并授予相应发送权限。
+JaySQL 服务端需要能访问 Bot API。保存后可点击“测试”验证真实投递，并在“通知策略”中选择该渠道，
+匹配需要发送的实例与告警等级；仅创建渠道不会自动订阅所有告警。
+
+各渠道编辑窗口新增 **告警消息模板（Markdown）**，可以点击变量按钮插入内容：
+
+```markdown
+## {{title}}
+
+- 实例：{{instance_name}}（{{instance_target}}）
+- 数据库：{{db_type}} / {{environment}}
+- 等级：{{level}} · {{level_label}}
+- 状态：{{state}}
+- 指标：{{metric_name}}
+- 当前值：{{observed_value}}
+- 阈值：{{threshold}}
+- 持续：{{duration}}
+- 时间：{{occurred_at}}
+
+{{advice}}
+
+[查看实例明细]({{url}})
+```
+
+也可使用 `{{event_id}}`、`{{instance_id}}`、`{{business}}`、`{{metric_key}}`、`{{trigger}}`、
+`{{triggered_at}}`、`{{occurrences}}`、`{{operator}}` 等变量，以编辑器的变量按钮为准。
+变量名区分大小写，仅支持 `{{变量名}}` 替换，不执行表达式、函数或循环；未知变量保存时会被拒绝。
+变量值作为普通内容转义，避免实例名中的下划线等字符意外改变排版。
+
+* 可选择“触发告警 / 恢复通知 / 认领通知”查看样例预览，同时检查格式与纯文本；**预览不会发送消息**。
+* 模板留空或点击“恢复默认正文”使用原有告警格式；模板按渠道保存，无需额外数据库迁移。
+* 正文在通知入队时生成快照，修改模板只影响后续新任务；已入队任务重试时保留原正文。
+* 聚合汇总保留系统生成的多告警摘要，不套用单事件模板；升级通知可使用相同变量。
+* Telegram 将通用 Markdown 转换为受支持的富文本（标题、加粗、斜体、列表、链接、代码）；
+  不直接透传原始 HTML，不发送 Markdown 图片，表格不作为富文本表格渲染。
+  单条消息超过 4096 字符会明确报错，请缩短模板；其他渠道的实际排版以各平台能力为准。
+
+Telegram 接口及权限要求见 [官方 Bot API 文档](https://core.telegram.org/bots/api#sendmessage)。
+
+---
+
+## Redis 实例与 S3 备份存储目标
+
+### Redis 实例管理
+
+在 **系统管理 → 实例管理 → 新增数据库实例** 中选择 `Redis`，填写环境、名称及连接地址，默认端口 `6379`。
+
+* 无认证：ACL 用户名和密码均留空。
+* 仅密码认证（`requirepass` / 默认用户）：用户名留空，填写密码。
+* ACL 认证：填写 ACL 用户名和对应密码；具有 `nopass` 权限的 ACL 用户可只填用户名。
+* TLS：按服务端要求开启“TLS 加密连接”；会校验证书与主机名，CA 必须受 JaySQL 所在系统/容器信任，不跳过证书校验。
+* 编辑时密码留空表示保留旧密码；连接无密码服务时，勾选“清除已保存密码”。
+
+“测试连接”和后台探活仅执行必要的 `AUTH` 与 `PING`，不执行数据写入或全库扫描。
+使用 Redis 数据节点地址，不填写 Sentinel 管理端口；本次不提供 Sentinel 发现或集群拓扑管理。
+Redis 当前仅支持实例登记、编辑和连通性状态，不提供 SQL 工作台、SQL 元数据同步、Redis 引擎监控或 Redis 备份恢复。
+启动时由既有自动迁移扩容实例用户名和密码密文字段，以容纳 ACL 用户名及加密后的 Unicode 长密码。
+保存配置不是连接成功的证明，保存后可手动测试或等待后台探活更新状态。
+
+### Amazon S3 / MinIO / S3 兼容服务
+
+在 **备份恢复 → 存储目标 → 新增存储目标** 中选择 **Amazon S3 / MinIO / S3 兼容服务**：
+
+| 字段 | Amazon S3 示例 | MinIO 示例 |
+| :--- | :--- | :--- |
+| Endpoint | `https://s3.ap-southeast-1.amazonaws.com` | `http://minio-host:9000` |
+| Region | `ap-southeast-1`，与 Bucket 所在区域一致 | 与服务端配置一致，通常为 `us-east-1` |
+| Bucket | 已存在的备份桶名 | 已存在的备份桶名 |
+| Path-Style | 默认关闭，使用虚拟主机寻址 | 通常开启，尤其是 IP 地址端点 |
+| AccessKey / SecretKey | 有相应桶权限的访问密钥 | MinIO 用户访问密钥 |
+
+Endpoint 填服务端点，不包含 Bucket 或对象路径。JaySQL 和实际执行备份的节点都需要能访问它。
+点击“测试连接”会执行桶访问、列举以及临时对象写入/删除预检，因此账号需要对应权限；
+实际备份还需分片上传、读取和清理所需权限。测试在指定 Bucket 中操作临时对象，不创建 Bucket。
+保存后在备份任务中选择该存储目标；备份数据仍由当前支持的数据库备份引擎生成，S3 是备份产物的存储目的地。
+
+S3 兼容目标复用已有配置类型 `S3_MINIO`，已有 MinIO 配置继续有效，无需修改数据库枚举。
+访问密钥保存时加密，编辑时留空保持旧值；当前使用 AccessKey / SecretKey，不包含临时 STS 凭据或 IAM Role 自动发现。
+
+参考：[Redis AUTH](https://redis.io/docs/latest/commands/auth/)、[Redis PING](https://redis.io/docs/latest/commands/ping/)、
+[Amazon S3 寻址方式](https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html)。
 
 ---
 

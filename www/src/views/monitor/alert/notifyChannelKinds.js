@@ -16,6 +16,7 @@ export const NOTIFY_CHANNEL_KINDS = [
   { kind: 'feishu', label: '飞书' },
   { kind: 'wechat', label: '企微' },
   { kind: 'email', label: '邮箱' },
+  { kind: 'telegram', label: 'Telegram' },
 ]
 
 // UI 侧隐藏的渠道类型：仅前端展示层收起（下拉/筛选/列表/策略渠道选择），

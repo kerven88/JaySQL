@@ -51,6 +51,7 @@
       v-model:open="modal.open"
       :title="modal.form.id ? '编辑通知渠道' : '新建通知渠道'"
       width="680px"
+      :body-style="{ maxHeight: '70vh', overflowY: 'auto' }"
       :confirm-loading="saving"
       @ok="submit"
     >
@@ -144,6 +145,12 @@
           </a-col>
         </a-row>
 
+        <a-collapse class="params-collapse">
+          <a-collapse-panel key="message-template" header="告警消息模板（Markdown）">
+            <NotifyMessageTemplateEditor v-if="modal.open" v-model="modal.form.config.message_template" :kind="modal.form.kind" :key="`${modal.form.id}:${modal.form.kind}`" />
+          </a-collapse-panel>
+        </a-collapse>
+
         <!-- 参数默认收起：非必填的投递调优项，需要时再展开 -->
         <a-collapse class="params-collapse">
           <a-collapse-panel key="params" header="参数">
@@ -175,6 +182,7 @@
 import { computed, reactive, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
+import NotifyMessageTemplateEditor from './NotifyMessageTemplateEditor.vue'
 import {
   getNotifyChannelsApi,
   createNotifyChannelApi,

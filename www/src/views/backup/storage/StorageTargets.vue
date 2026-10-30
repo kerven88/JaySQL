@@ -141,17 +141,17 @@
 
         <template v-else>
           <div class="editor-form-grid">
-            <a-form-item label="Endpoint" name="s3_endpoint">
+            <a-form-item label="Endpoint" name="s3_endpoint" :extra="editorForm.type === 'S3_MINIO' ? '填写服务端点，不含 Bucket 或对象路径；AWS 使用所在区域的 S3 端点，MinIO 可包含 http:// 和端口' : undefined">
               <a-input v-model:value="editorForm.s3_endpoint" :placeholder="endpointPlaceholder(editorForm.type)" />
             </a-form-item>
-            <a-form-item label="Region" name="s3_region">
+            <a-form-item label="Region" name="s3_region" :extra="editorForm.type === 'S3_MINIO' ? 'AWS 必须与 Bucket 所在区域一致；MinIO 使用服务端配置的 Region（通常为 us-east-1）' : undefined">
               <a-input v-model:value="editorForm.s3_region" :placeholder="regionPlaceholder(editorForm.type)" />
             </a-form-item>
           </div>
           <a-form-item label="Bucket" name="s3_bucket">
             <a-input v-model:value="editorForm.s3_bucket" placeholder="例如 my-backup-bucket" />
           </a-form-item>
-          <a-form-item label="Path-Style" name="s3_force_path_style" extra="自建 MinIO 等 S3 兼容服务一般需开启；阿里云 OSS 使用虚拟主机寻址，保持关闭即可">
+          <a-form-item label="Path-Style" name="s3_force_path_style" extra="Amazon S3、阿里云 OSS 默认保持关闭，使用虚拟主机寻址；MinIO / IP 地址端点通常需手动开启，其他 S3 兼容服务按其要求设置">
             <a-switch v-model:checked="editorForm.s3_force_path_style" />
           </a-form-item>
           <div class="editor-form-grid">
@@ -415,18 +415,17 @@ const columns = [
   { key: 'actions', title: '操作', align: 'center' },
 ]
 
-// 本期支持的类型：本地备份服务器（SSH）、阿里云 OSS。
-// MinIO / 自建 S3 暂不可选（禁用占位并标注「未来将支持」）；腾讯云 COS、华为云 OBS 本期不支持，已移除。
+// 通用 S3 兼容服务复用 S3_MINIO 类型，保持既有存储目标和数据库兼容。
 const typeOptions = [
   { value: 'LOCAL_SERVER', label: '本地备份服务器（SSH）' },
   { value: 'OSS_ALIYUN', label: '阿里云 OSS' },
-  { value: 'S3_MINIO', label: 'MinIO / 自建 S3', disabled: true, tag: '未来将支持' },
+  { value: 'S3_MINIO', label: 'Amazon S3 / MinIO / S3 兼容服务' },
 ]
 
 const endpointPlaceholder = (t) => {
   switch (t) {
     case 'OSS_ALIYUN': return 'oss-cn-hangzhou.aliyuncs.com（无需 https://）'
-    case 'S3_MINIO': return 'http://minio-host:9000'
+    case 'S3_MINIO': return 's3.ap-southeast-1.amazonaws.com / http://minio-host:9000'
     default: return ''
   }
 }
@@ -442,7 +441,7 @@ function typeDisplayLabel(t) {
   const map = {
     LOCAL_SERVER: '本地备份服务器',
     OSS_ALIYUN: '阿里云 OSS',
-    S3_MINIO: 'MinIO',
+    S3_MINIO: 'Amazon S3 / MinIO / S3 兼容服务',
   }
   return map[t] || t || '-'
 }

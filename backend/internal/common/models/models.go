@@ -23,13 +23,14 @@ func (InsightInstanceEnvironments) TableName() string {
 // 工单DB配置
 type InsightInstances struct {
 	*Model
-	InstanceID       string         `gorm:"type:char(15);not null;default:'';uniqueIndex:uniq_instance_id;comment:数据源业务ID" json:"instance_id"`
-	Hostname         string         `gorm:"type:varchar(128);not null;default:'';uniqueIndex:uniq_hostname;comment:主机名" json:"hostname"`
-	Port             int            `gorm:"type:int;not null;default 3306;uniqueIndex:uniq_hostname;comment:端口" json:"port"`
-	User             string         `gorm:"type:varchar(32);not null;default:'';comment:用户名" json:"user"`
+	InstanceID string `gorm:"type:char(15);not null;default:'';uniqueIndex:uniq_instance_id;comment:数据源业务ID" json:"instance_id"`
+	Hostname   string `gorm:"type:varchar(128);not null;default:'';uniqueIndex:uniq_hostname;comment:主机名" json:"hostname"`
+	Port       int    `gorm:"type:int;not null;default 3306;uniqueIndex:uniq_hostname;comment:端口" json:"port"`
+	User       string `gorm:"type:varchar(128);not null;default:'';comment:用户名" json:"user"`
 	// password 不参与 JSON 序列化：这是数据库密码的密文，任何接口都不应返回它。
 	// 前端判断"是否已配置"用 *_configured 类布尔字段；编辑时留空即表示不修改。
-	Password         string         `gorm:"type:varchar(128);not null;default:'';comment:密码(加密存储)" json:"-"`
+	// 256 Unicode characters can exceed 1 KiB after AES-GCM/Base64; keep the full ciphertext.
+	Password         string         `gorm:"type:varchar(2048);not null;default:'';comment:密码(加密存储)" json:"-"`
 	UseType          EnumType       `gorm:"type:ENUM('查询', '工单');default:工单;uniqueIndex:uniq_hostname;comment:用途" json:"use_type"`
 	DbType           EnumType       `gorm:"type:varchar(32);not null;default:'MySQL';comment:数据库类型" json:"db_type"`
 	ExtraConfig      datatypes.JSON `gorm:"type:json;null;default:null;comment:扩展连接参数" json:"extra_config"`

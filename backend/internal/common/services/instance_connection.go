@@ -22,10 +22,10 @@ import (
 
 	commonModels "github.com/simajiong/jaysql/internal/common/models"
 
-	"github.com/simajiong/jaysql/internal/common/dbfamily"
-	"github.com/simajiong/jaysql/internal/common/sqlserverdsn"
 	_ "github.com/microsoft/go-mssqldb"
 	go_ora "github.com/sijms/go-ora/v2"
+	"github.com/simajiong/jaysql/internal/common/dbfamily"
+	"github.com/simajiong/jaysql/internal/common/sqlserverdsn"
 )
 
 type AdminTestInstanceConnectionService struct {
@@ -91,21 +91,53 @@ func ProbeInstanceConnection(ctx context.Context, id uint64, mode ProbeMode) (*C
 		updateInstanceConnectionStatus(id, "error", err.Error())
 		return nil, err
 	}
-	updateInstanceConnectionStatus(id, "success", connectionSuccessMessageForMode(report, mode))
+	summary := connectionSuccessMessageForMode(report, mode)
+	if strings.EqualFold(string(instance.DbType), "Redis") {
+		summary = "Redis 连接正常（PING 成功）"
+	}
+	updateInstanceConnectionStatus(id, "success", summary)
 	return report, nil
 }
 
 type AdminTestInstanceConnectionByPayloadService struct {
-	C           context.Context
-	DbType      string
-	Hostname    string
-	Port        int
-	User        string
-	Password    string
-	ExtraConfig map[string]any
+	ID            uint64
+	ClearPassword bool
+	C             context.Context
+	DbType        string
+	Hostname      string
+	Port          int
+	User          string
+	Password      string
+	ExtraConfig   map[string]any
 }
 
 func (s *AdminTestInstanceConnectionByPayloadService) Run() (*ConnectionTestReport, error) {
+	if s.ClearPassword && (!strings.EqualFold(s.DbType, "Redis") || s.Password != "") {
+		return nil, fmt.Errorf("仅 Redis 支持清除密码，且不能同时填写新密码")
+	}
+
+	if strings.EqualFold(s.DbType, "Redis") && s.ID > 0 && s.Password == "" && !s.ClearPassword {
+		var saved commonModels.InsightInstances
+		if global.App.DB == nil {
+			return nil, fmt.Errorf("数据库未初始化")
+		}
+		if err := global.App.DB.Where("id = ? AND db_type = ?", s.ID, "Redis").Take(&saved).Error; err != nil {
+			return nil, fmt.Errorf("Redis 实例不存在")
+		}
+		// Never send a saved secret to a different endpoint supplied by a test request.
+		if s.Hostname != saved.Hostname || s.Port != saved.Port || s.User != saved.User {
+			return nil, fmt.Errorf("修改 Redis 地址或账号后测试连接，请重新输入密码或选择清除密码")
+		}
+		password, err := secret.Decrypt(saved.Password)
+		if err != nil {
+			return nil, fmt.Errorf("实例密码解密失败")
+		}
+		s.Password = password
+	}
+	if strings.EqualFold(s.DbType, "Redis") && s.ClearPassword {
+		s.Password = ""
+	}
+
 	extraConfig, err := marshalExtraConfig(s.ExtraConfig)
 	if err != nil {
 		return nil, err
@@ -153,6 +185,12 @@ func testConnectionMode(ctx context.Context, mode ProbeMode, dbType string, host
 	probePeripherals := mode != ProbeModeLightweight
 
 	switch strings.ToLower(dbType) {
+	case "redis":
+		if err := probeRedisConnection(childCtx, hostname, port, user, password, cfg); err != nil {
+			return nil, err
+		}
+		return &ConnectionTestReport{Privileges: []PrivilegeCheckItem{}}, nil
+
 	case "mysql", "tidb", "doris":
 		db := dao.DB{
 			User:     user,

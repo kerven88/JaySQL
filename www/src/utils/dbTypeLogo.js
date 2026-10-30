@@ -9,6 +9,7 @@
  * .db-type-icon / .db-logo-img 等类名各自声明，但宽高一律 20×20，与文字间距由各页面自定。
  */
 import mysqlLogo from '@/assets/logo/mysql.png'
+import redisLogo from '@/assets/logo/redis.svg'
 import pgLogo from '@/assets/logo/postgresql.png'
 import oracleLogo from '@/assets/logo/oracle.png'
 import sqlserverLogo from '@/assets/logo/sqlserver.png'
@@ -20,6 +21,7 @@ import dorisLogo from '@/assets/logo/doris.svg'
 
 /** 键统一为大写数据库类型，值对应 assets/logo 下的品牌图标 */
 const LOGO_BY_DB_TYPE = Object.freeze({
+ REDIS: redisLogo,
   MYSQL: mysqlLogo,
   POSTGRESQL: pgLogo,
   ORACLE: oracleLogo,

@@ -208,6 +208,13 @@ type AdminUpdateInstancesService struct {
 }
 
 func (s *AdminUpdateInstancesService) Run() error {
+	if s.ClearPassword && string(s.DbType) != "Redis" {
+		return fmt.Errorf("仅 Redis 实例支持清除密码")
+	}
+	if s.ClearPassword && s.Password != "" {
+		return fmt.Errorf("清除密码时不能同时填写新密码")
+	}
+
 	if err := validateInstanceHostname(s.Hostname); err != nil {
 		return err
 	}
@@ -250,6 +257,7 @@ func (s *AdminUpdateInstancesService) Run() error {
 			mergeKeepOld("ssh_private_key")
 			mergeKeepOld("database")
 			mergeKeepOld("sslmode")
+			mergeKeepOld("redis_tls")
 			mergeKeepOld("auth_source")
 			mergeKeepOld("service_name")
 			// OceanBase 租户模式：编辑态前端会回填旧值，这里兜底保留，
@@ -277,6 +285,9 @@ func (s *AdminUpdateInstancesService) Run() error {
 	}
 	updates["extra_config"] = extraConfig
 
+	if s.ClearPassword {
+		updates["password"] = ""
+	}
 	// 仅当传入非空 password 时才更新密码
 	if s.Password != "" {
 		encryptPassword, err := secret.Encrypt(s.Password)
@@ -356,6 +367,16 @@ func normalizeInstanceExtraConfig(dbType string, raw map[string]any, mode string
 	}
 
 	switch dbType {
+	case "Redis":
+		useTLS := false
+		if value, exists := raw["redis_tls"]; exists && value != nil {
+			parsed, ok := value.(bool)
+			if !ok {
+				return nil, fmt.Errorf("Redis TLS 参数必须为布尔值")
+			}
+			useTLS = parsed
+		}
+		cfg["redis_tls"] = useTLS
 	case "PostgreSQL":
 		database := readString("database")
 		if database == "" {

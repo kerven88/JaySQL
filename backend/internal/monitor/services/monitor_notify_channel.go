@@ -130,6 +130,14 @@ func SaveNotifyChannel(form NotifyChannelForm, operator string) (uint64, error) 
 	if err != nil {
 		return 0, err
 	}
+	if value, exists := merged["message_template"]; exists && value != nil {
+		if _, ok := value.(string); !ok {
+			return 0, fmt.Errorf("消息模板必须为字符串")
+		}
+	}
+	if err := validateNotifyMessageTemplate(notifyCfgString(merged, "message_template")); err != nil {
+		return 0, err
+	}
 	// 校验：用合并后的配置（含继承的默认凭据）判断必填与连通性格式
 	if err := channel.Validate(withChannelDefaults(kind, merged, false)); err != nil {
 		return 0, fmt.Errorf("渠道配置校验失败: %w", err)
@@ -261,6 +269,14 @@ func TestNotifyChannel(id uint64) (notifier.Result, error) {
 		PlainText: "JaySQL 通知渠道测试：收到即代表该渠道配置可用。",
 		Level:     AlertLevelP3,
 		Meta:      map[string]string{"test": "1"},
+	}
+	// Test the configured alert template with the same sample values as preview.
+	if template := notifyCfgString(cfg, "message_template"); template != "" {
+		payload, err := applyNotifyMessageTemplate(notifyTemplateSample("firing"), template)
+		if err != nil {
+			return notifier.Result{}, err
+		}
+		msg = payload.toMessage()
 	}
 	// 群渠道没有个人地址；邮件渠道用发件账号给自己发一封，验证 SMTP 全链路
 	if channel.Capabilities().Personalizable {

@@ -120,3 +120,5 @@ export const getLoadSnapshotsApi = (params) => get('/api/v1/monitor/snapshots', 
 export const createLoadSnapshotApi = (params) => post('/api/v1/monitor/snapshots', params)
 export const getLoadSnapshotDetailApi = (id) => get(`/api/v1/monitor/snapshots/${id}`)
 export const deleteLoadSnapshotApi = (id) => del(`/api/v1/monitor/snapshots/${id}`)
+
+export const previewNotifyMessageTemplateApi = (params) => post('/api/v1/monitor/notify/templates/preview', params)

@@ -118,6 +118,16 @@ type Meta struct {
 
 // 内置渠道的静态元数据（与适配器一一对应）。
 var channelMetas = map[string]Meta{
+	"telegram": {
+		Kind: "telegram", Label: "Telegram",
+		Description: "使用 Bot 向指定会话或群话题发送告警；请先私聊启动机器人，或将机器人加入群并授予发送权限。支持通用 Markdown，发送时转换为 Telegram 富文本；单条最多 4096 字符。",
+		Fields: []ConfigField{
+			{Key: "bot_token", Label: "Bot Token", Type: "password", Secret: true, Required: true, Placeholder: "从 @BotFather 获取"},
+			{Key: "chat_id", Label: "Chat ID", Type: "string", Required: true, Placeholder: "如 -1001234567890 或 @channelname", Help: "使用字符串保存，支持负数群组 ID"},
+			{Key: "message_thread_id", Label: "群话题 ID（可选）", Type: "string", Placeholder: "仅向指定群话题发送时填写正整数"},
+			{Key: "api_url", Label: "Bot API 地址（可选）", Type: "string", Placeholder: "https://api.telegram.org", Help: "默认使用 Telegram 官方 API，也可填写可达的 Bot API 网关地址"},
+		},
+	},
 	"dingtalk": {
 		Kind:  "dingtalk",
 		Label: "钉钉群机器人",

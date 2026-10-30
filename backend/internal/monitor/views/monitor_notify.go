@@ -263,3 +263,21 @@ func RetryNotifyTaskView(c *gin.Context) {
 	}
 	response.Success(c, nil, "已重新入队，将在下个投递周期发送")
 }
+
+// PreviewNotifyMessageTemplateView renders sample data only; it never sends messages.
+func PreviewNotifyMessageTemplateView(c *gin.Context) {
+	var form struct {
+		Template string `json:"template"`
+		Trigger  string `json:"trigger"`
+	}
+	if err := c.ShouldBindJSON(&form); err != nil {
+		response.ValidateFail(c, err.Error())
+		return
+	}
+	preview, err := services.PreviewNotifyMessageTemplate(form.Template, form.Trigger)
+	if err != nil {
+		response.Fail(c, err.Error())
+		return
+	}
+	response.Success(c, preview, "success")
+}

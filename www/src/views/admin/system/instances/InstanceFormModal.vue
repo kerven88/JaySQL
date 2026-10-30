@@ -137,22 +137,38 @@
 
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="登录账号" name="user">
-                  <a-input v-model:value="formData.user" placeholder="请输入登录账号" />
+                <a-form-item :label="isRedis ? 'ACL 用户名（可选）' : '登录账号'" name="user">
+                  <a-input v-model:value="formData.user" :placeholder="isRedis ? '留空使用默认用户；无认证可留空' : '请输入登录账号'" />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
                 <a-form-item
-                  label="密码"
+                  :label="isRedis ? '密码（可选）' : '密码'"
                   name="password"
                 >
                   <a-input-password
                     v-model:value="formData.password"
-                    :placeholder="isEditMode ? '留空则不修改密码' : '请输入密码'"
+                    :placeholder="isEditMode ? '留空则不修改密码' : isRedis ? '无认证可留空' : '请输入密码'"
+                    :disabled="isRedis && formData.clear_password"
                     :status="uiState.passwordFieldError ? 'error' : undefined"
                   />
                 </a-form-item>
               </a-col>
+            </a-row>
+
+            <a-row v-if="isRedis" :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="TLS 加密连接">
+                  <a-switch v-model:checked="formData.redis_tls" />
+                  <div class="redis-hint">启用后校验服务端证书与主机名，使用系统信任证书。</div>
+                </a-form-item>
+              </a-col>
+              <a-col v-if="isEditMode" :span="12">
+                <a-form-item label="清除已保存密码">
+                  <a-checkbox v-model:checked="formData.clear_password" @change="onRedisClearPasswordChange">连接无密码实例</a-checkbox>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24"><div class="redis-hint">Redis 当前支持实例登记和 AUTH / PING 连通性检测；使用 Redis 数据节点地址，不使用 Sentinel 服务端口。</div></a-col>
             </a-row>
 
             <!-- 运维录入型画像字段：部署形态 / 云厂商 / 高可用模式从数据库侧探测不出来，
@@ -444,8 +460,10 @@ const formRef = ref()
      3) 元数据同步分派（common/tasks/tasks.go: SyncDBMetaForInstance）
    SQLServer 三项均已具备（DAS 侧另有执行器、schema 浏览、行数限制改写），
    此前只是前端白名单把它漏掉了，属于"后端能连、界面选不到"。
-   MongoDB 仍不在白名单内：DAS 执行链路没有 Mongo 分支。 */
+   MongoDB 仍不在白名单内：DAS 执行链路没有 Mongo 分支。
+   Redis 仅开放实例登记与连通性探测，不进入 SQL 元数据同步和执行链路。 */
 const DB_TYPE_CONFIG = {
+ Redis: { defaultPort: 6379 },
   MySQL: {
     defaultPort: 3306,
   },
@@ -530,6 +548,9 @@ const DEFAULT_SSH_PORT = 22
 
 // OceanBase 双模式判定：只认 extra_config.oceanbase_mode 的归一化结果，
 // 与后端 dbfamily.OceanBaseMode 同一口径，避免「前端按 A 通道提交、后端按 B 通道连接」。
+const isRedis = computed(() => formData.value?.db_type === 'Redis')
+const onRedisClearPasswordChange = () => { if (formData.value.clear_password) formData.value.password = '' }
+
 const isOceanBase = computed(() => isOceanBaseType(formData.value?.db_type))
 const oceanbaseMode = computed(() => normalizeOceanBaseMode(formData.value?.oceanbase_mode))
 const isOceanBaseOracleMode = computed(() => isOceanBase.value && oceanbaseMode.value === OCEANBASE_ORACLE)
@@ -744,7 +765,7 @@ const rules = computed(() => ({
     },
   ],
   user: [
-    { required: props.canManage, message: '请输入登录账号', trigger: 'blur' },
+    { required: props.canManage && !isRedis.value, message: '请输入登录账号', trigger: 'blur' },
     {
       validator: (_, value) => {
         const v = (value || '').trim()
@@ -764,7 +785,7 @@ const rules = computed(() => ({
   ],
   password: [
     // 新增态必须输入密码；编辑态允许留空（留空表示不修改密码）
-    ...(!isEditMode.value
+    ...(!isEditMode.value && !isRedis.value
       ? [
           {
             required: props.canManage,
@@ -1004,6 +1025,7 @@ const safeParseExtraConfig = (raw) => {
 }
 
 const applyTypeDefaults = (newType, oldType) => {
+  if (newType !== 'Redis') formData.value.clear_password = false
   const nextPort = getDefaultPort(newType)
   const prevPort = getDefaultPort(oldType)
   if (nextPort && (!formData.value?.port || formData.value.port === prevPort)) {
@@ -1056,6 +1078,8 @@ const handleOceanBaseModeChange = (event) => {
 
 const hydrateTypeSpecificFields = () => {
   const cfg = safeParseExtraConfig(formData.value?.extra_config)
+  formData.value.redis_tls = cfg.redis_tls === true
+  formData.value.clear_password = false
   formData.value.database = cfg.database || ''
   // SQLServer 的默认库是必填语义（后端落库兜底 master）：老数据若没写这一项，
   // 编辑态直接显示空会让用户以为要重新填，这里按同一口径补上。
@@ -1105,6 +1129,7 @@ const buildExtraConfigPayload = () => {
     return cfg
   }
   switch (formData.value?.db_type) {
+    case 'Redis': return { redis_tls: formData.value.redis_tls === true }
     case 'PostgreSQL': {
       const cfg = {
         database: (formData.value?.database || 'postgres').trim(),
@@ -1323,6 +1348,8 @@ const onSubmit = async () => {
     delete payload.service_name
     // 租户模式与上面几项一样，只是「表单展示字段」，真实值已折进 extra_config
     delete payload.oceanbase_mode
+    delete payload.redis_tls
+    if (!isRedis.value) delete payload.clear_password
     if (isEditMode.value && (!payload.password || !(String(payload.password).trim()))) {
       delete payload.password
     }
@@ -1373,7 +1400,7 @@ const handleTestConnection = async () => {
   uiState.testing = true
   clearTestFeedback()
   try {
-    if (isEditMode.value && !pwd) {
+    if (isEditMode.value && !pwd && !isRedis.value) {
       const id = formData.value?.id
       if (!id) {
         return
@@ -1386,6 +1413,7 @@ const handleTestConnection = async () => {
       openCheckReport(testResult?.data)
     } else {
       const payload = {
+        ...(isRedis.value && isEditMode.value ? { id: formData.value.id, clear_password: !!formData.value.clear_password } : {}),
         db_type: formData.value?.db_type,
         hostname: (formData.value?.hostname || '').trim(),
         port: formData.value?.port,
@@ -1409,6 +1437,7 @@ const handleTestConnection = async () => {
 </script>
 
 <style scoped>
+.redis-hint { color: var(--gi-color-text-secondary, #71818c); font-size: 12px; margin-top: 6px; margin-bottom: 12px; }
 .instance-modal-body {
   padding-top: 4px;
   display: flex;

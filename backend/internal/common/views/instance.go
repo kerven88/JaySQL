@@ -18,6 +18,9 @@ import (
 )
 
 func asyncSyncInstanceMeta(instance commonModels.InsightInstances) {
+	if strings.EqualFold(string(instance.DbType), "Redis") {
+		return
+	}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -63,6 +66,15 @@ func finalizeInstancePostWrite(instance *commonModels.InsightInstances, message 
 	if instance == nil {
 		return
 	}
+	if strings.EqualFold(string(instance.DbType), "Redis") {
+		// Saving a Redis endpoint is not a connectivity check and has no SQL metadata.
+		_ = global.App.DB.Table("insight_instances").Where("id = ?", instance.ID).Updates(map[string]any{
+			"last_check_status":  "unknown",
+			"last_check_message": "Redis 实例已保存，请测试连接或等待后台探活",
+		}).Error
+		return
+	}
+
 	if syncMeta {
 		asyncSyncInstanceMeta(*instance)
 	}
@@ -344,13 +356,15 @@ func AdminTestInstanceConnectionByPayloadView(c *gin.Context) {
 		return
 	}
 	service := services.AdminTestInstanceConnectionByPayloadService{
-		C:           c.Request.Context(),
-		DbType:      string(form.DbType),
-		Hostname:    form.Hostname,
-		Port:        form.Port,
-		User:        form.User,
-		Password:    form.Password,
-		ExtraConfig: form.ExtraConfig,
+		ID:            form.ID,
+		ClearPassword: form.ClearPassword,
+		C:             c.Request.Context(),
+		DbType:        string(form.DbType),
+		Hostname:      form.Hostname,
+		Port:          form.Port,
+		User:          form.User,
+		Password:      form.Password,
+		ExtraConfig:   form.ExtraConfig,
 	}
 	report, err := service.Run()
 	if err != nil {

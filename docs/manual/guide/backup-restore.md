@@ -4,7 +4,7 @@ group: guide
 order: 40
 icon: safety
 desc: 备份任务、存储目标、备份集与恢复向导
-updated: 2026-10-09
+updated: 2026-10-30
 reading: 10 分钟
 tags: [功能, 核心]
 keywords: [备份, 恢复, 还原, 误删, 备份集, 存储目标, OSS, MinIO, xtrabackup, pgbackrest, 逻辑备份, 物理备份, 预检, PLAN, EXECUTE, 恢复点]
@@ -109,3 +109,14 @@ MySQL 物理恢复只支持恢复到**已有实例**，不支持新建实例。
 
 - [快速开始](../start/quick-start.md)：agent 上线与排障命令
 - [产品架构](../start/architecture.md)：agent 与服务端的网络方向
+
+## Amazon S3 与 S3 兼容备份目标
+
+新增存储目标时可选择“Amazon S3 / MinIO / S3 兼容服务”，填写 Endpoint、Region、Bucket 和 AccessKey / SecretKey。
+AWS 的 Endpoint 使用 Bucket 所在区域的服务地址（不含 Bucket 和对象路径），Region 与 Bucket 一致，Path-Style 默认关闭。
+MinIO 使用服务端配置的 Region，IP/本地端点通常需要开启 Path-Style。
+密钥加密保存，编辑留空表示不修改。执行备份的节点也必须能访问该端点。
+
+测试连接会检查桶访问、列举和临时对象写入/删除；备份账号还需具有分片上传、读取及清理权限。
+预检不会创建 Bucket，需提前建好。保存后在备份任务中选用该目标即可，现有 MinIO 配置继续有效。
+当前使用 AccessKey / SecretKey，不包含 STS 临时凭据或 IAM Role 自动发现；S3 目标并不代表新增 Redis 备份引擎。

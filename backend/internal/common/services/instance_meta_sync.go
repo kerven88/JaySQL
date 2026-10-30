@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	commonModels "github.com/simajiong/jaysql/internal/common/models"
 	commonTasks "github.com/simajiong/jaysql/internal/common/tasks"
@@ -25,6 +26,9 @@ func (s *AdminSyncInstanceMetaService) Run() error {
 			return fmt.Errorf("实例不存在")
 		}
 		return err
+	}
+	if strings.EqualFold(string(instance.DbType), "Redis") {
+		return fmt.Errorf("Redis 当前仅支持实例管理与连接探测，不提供 SQL 元数据同步")
 	}
 	return commonTasks.SyncDBMetaForInstance(instance)
 }

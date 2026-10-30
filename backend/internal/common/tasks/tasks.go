@@ -365,9 +365,9 @@ func SyncDBMetaForInstance(row models.InsightInstances) error {
 		}
 	case "oceanbase":
 		/* OceanBase 按租户模式复用 MySQL / Oracle 两套枚举口径：
-		     - Oracle 模式：schema = 用户（all_users），与 Oracle 一致；
-		     - MySQL 模式：database = information_schema.schemata，与 MySQL 一致。
-		   模式取自 extra_config.oceanbase_mode，缺省 MySQL 模式。 */
+		   - Oracle 模式：schema = 用户（all_users），与 Oracle 一致；
+		   - MySQL 模式：database = information_schema.schemata，与 MySQL 一致。
+		 模式取自 extra_config.oceanbase_mode，缺省 MySQL 模式。 */
 		if dbfamily.OceanBaseOracleMode(row.ExtraConfig) {
 			serviceName := extraCfg.Service
 			if serviceName == "" {
@@ -427,6 +427,9 @@ func SyncDBMeta() {
 	var wg sync.WaitGroup
 	ch := make(chan struct{}, 4)
 	for _, row := range records {
+		if strings.EqualFold(string(row.DbType), "Redis") {
+			continue
+		}
 		ch <- struct{}{}
 		wg.Add(1)
 		// 获取目标数据库的库信息

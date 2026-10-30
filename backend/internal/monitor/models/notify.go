@@ -19,6 +19,7 @@ import (
 const (
 	NotifyKindDingTalk = "dingtalk"
 	NotifyKindFeishu   = "feishu"
+	NotifyKindTelegram = "telegram"
 	NotifyKindEmail    = "email"
 	NotifyKindWechat   = "wechat"
 	NotifyKindSMS      = "sms"   // 二期

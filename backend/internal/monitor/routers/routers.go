@@ -52,6 +52,7 @@ func Routers(r *gin.Engine) {
 
 	// 通知渠道：告警消息的出口。渠道实例可多个（多个钉钉群/多套 SMTP），敏感字段加密存储、
 	// 接口只回显掩码。测试接口发一条样例消息，用于保存后自检。
+	v1.POST("/monitor/notify/templates/preview", middleware.RequirePermission("monitor.manage"), views.PreviewNotifyMessageTemplateView)
 	v1.GET("/monitor/notify/channels", middleware.RequirePermission("monitor.view"), views.GetNotifyChannelsView)
 	v1.GET("/monitor/notify/channels/brief", middleware.RequirePermission("monitor.view"), views.GetNotifyChannelsBriefView)
 	v1.POST("/monitor/notify/channels", middleware.RequirePermission("monitor.manage"), views.SaveNotifyChannelView)

@@ -17,9 +17,9 @@ type AdminGetInstancesForm struct {
 type AdminCreateInstancesForm struct {
 	Hostname    string          `form:"hostname"  json:"hostname" binding:"required,min=2,max=128"`
 	Port        int             `form:"port"  json:"port" binding:"required"`
-	User        string          `form:"user"  json:"user" binding:"required,min=1,max=128"`
-	Password    string          `form:"password"  json:"password" binding:"required,min=1,max=256"`
-	DbType      models.EnumType `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB Doris ClickHouse PostgreSQL MongoDB Oracle SQLServer OceanBase"`
+	User        string          `form:"user"  json:"user" binding:"required_unless=DbType Redis,omitempty,min=1,max=128"`
+	Password    string          `form:"password"  json:"password" binding:"required_unless=DbType Redis,omitempty,min=1,max=256"`
+	DbType      models.EnumType `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB Doris ClickHouse PostgreSQL MongoDB Oracle SQLServer OceanBase Redis"`
 	ExtraConfig map[string]any  `form:"extra_config" json:"extra_config"`
 	Environment int             `form:"environment"  json:"environment" binding:"required"`
 	Remark      string          `form:"remark"  json:"remark" binding:"required,min=2,max=256"`
@@ -35,12 +35,13 @@ type AdminCreateInstancesForm struct {
 }
 
 type AdminUpdateInstancesForm struct {
-	Hostname string `form:"hostname"  json:"hostname" binding:"required,min=2,max=128"`
-	Port     int    `form:"port"  json:"port" binding:"required"`
-	User     string `form:"user"  json:"user" binding:"required,min=1,max=128"`
+	ClearPassword bool   `json:"clear_password"`
+	Hostname      string `form:"hostname"  json:"hostname" binding:"required,min=2,max=128"`
+	Port          int    `form:"port"  json:"port" binding:"required"`
+	User          string `form:"user"  json:"user" binding:"required_unless=DbType Redis,omitempty,min=1,max=128"`
 	// 编辑时 password 允许不传/为空：不修改原密码；当传入非空值时才会更新
 	Password    string          `form:"password"  json:"password" binding:"omitempty,min=1,max=256"`
-	DbType      models.EnumType `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB Doris ClickHouse PostgreSQL MongoDB Oracle SQLServer OceanBase"`
+	DbType      models.EnumType `form:"db_type"  json:"db_type" binding:"required,oneof=MySQL TiDB Doris ClickHouse PostgreSQL MongoDB Oracle SQLServer OceanBase Redis"`
 	ExtraConfig map[string]any  `form:"extra_config" json:"extra_config"`
 	Environment int             `form:"environment"  json:"environment" binding:"required"`
 	Remark      string          `form:"remark"  json:"remark" binding:"required,min=2,max=256"`

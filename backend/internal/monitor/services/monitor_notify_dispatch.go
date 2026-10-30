@@ -209,6 +209,18 @@ func createNotifyTask(
 	payload notifyTaskPayload,
 	dedupScope string,
 ) bool {
+	// Freeze channel-specific content in the task so retries do not change the message.
+	cfg, err := notifier.DecodeChannelConfig(channel.Config)
+	if err != nil {
+		global.App.Log.Warnf("[monitor] 渠道 %d 配置解密失败", channel.ID)
+		return false
+	}
+	rendered, renderErr := applyNotifyMessageTemplate(payload, notifyCfgString(cfg, "message_template"))
+	if renderErr != nil {
+		global.App.Log.Warnf("[monitor] 渠道 %d 模板渲染失败，使用默认正文：%v", channel.ID, renderErr)
+	} else {
+		payload = rendered
+	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		global.App.Log.Warnf("[monitor] 渲染消息序列化失败: %v", err)

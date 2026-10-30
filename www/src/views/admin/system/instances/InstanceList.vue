@@ -186,7 +186,7 @@
                       <InfoCircleOutlined />
                       详情
                     </a-menu-item>
-                    <a-menu-item v-if="canSyncMetaInstance" key="sync" @click="handleSyncMeta(record)">
+                    <a-menu-item v-if="canSyncMetaInstance && record.db_type !== 'Redis'" key="sync" @click="handleSyncMeta(record)">
                       <SyncOutlined />
                       同步元数据
                     </a-menu-item>

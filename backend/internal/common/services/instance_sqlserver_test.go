@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 )
@@ -46,7 +47,7 @@ func TestNormalizeInstanceExtraConfigSQLServer(t *testing.T) {
 
 func TestTestConnectionModeRecognizesSQLServer(t *testing.T) {
 	// 127.0.0.1:1 必然连不上：只关心错误语义，不关心能否连通。
-	_, err := testConnectionMode(t.Context(), ProbeModeLightweight, "SQLServer",
+	_, err := testConnectionMode(context.Background(), ProbeModeLightweight, "SQLServer",
 		"127.0.0.1", 1, "sa", "whatever", []byte(`{"database":"master"}`))
 	if err == nil {
 		t.Fatalf("expected connection error, got nil")
