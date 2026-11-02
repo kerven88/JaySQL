@@ -237,29 +237,19 @@ func absMediaBackupDir() (string, error) {
 	return base, nil
 }
 
+// resolveBackupOutputBaseDir resolves a path for the execution node, not the API server.
+// Never inspect or create this path on the JaySQL server: it belongs to the Agent.
 func resolveBackupOutputBaseDir(input string) (string, error) {
-	if strings.TrimSpace(input) == "" {
-		return absMediaBackupDir()
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return filepath.Abs("./media/backup")
 	}
 	if !filepath.IsAbs(input) {
-		return "", fmt.Errorf("本地备份工作目录必须填写绝对路径，例如 /data/jaysql/backups；可留空使用默认目录，此字段不是 S3 对象路径")
+		return "", fmt.Errorf("执行节点工作目录必须填写绝对路径，例如 /data/backup；此目录属于数据库主机 / Agent，不是 JaySQL 服务器或 S3 对象路径")
 	}
-	base := filepath.Clean(strings.TrimSpace(input))
+	base := filepath.Clean(input)
 	if base == "." || base == string(os.PathSeparator) {
-		return "", fmt.Errorf("备份目录不合法")
-	}
-	info, err := os.Stat(base)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err := ensureDir(base); err != nil {
-				return "", err
-			}
-			return base, nil
-		}
-		return "", err
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("备份目录不是有效目录")
+		return "", fmt.Errorf("执行节点工作目录不能使用根目录")
 	}
 	return base, nil
 }
