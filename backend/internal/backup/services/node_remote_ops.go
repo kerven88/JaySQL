@@ -466,9 +466,9 @@ func currentNodeOnline(nodeID uint64) bool {
 }
 
 func killAgentProcessesScript(nodeID uint64, signal string) string {
-	pattern := fmt.Sprintf("-node-id[[:space:]]+%d", nodeID)
+	pattern := fmt.Sprintf("(^|[[:space:]])-node-id([[:space:]]+|=)%d([[:space:]]|$)", nodeID)
 	return "if command -v pgrep >/dev/null 2>&1 && command -v kill >/dev/null 2>&1; then " +
-		"PIDS=$(pgrep -af " + shellQuote("backup-agent") + " 2>/dev/null | grep -E " + shellQuote(pattern) + " | awk '{print $1}' || true); " +
+		"PIDS=$(pgrep -a -x " + shellQuote("backup-agent") + " 2>/dev/null | grep -E -- " + shellQuote(pattern) + " | awk '{print $1}' || true); " +
 		"if [ -n \"$PIDS\" ]; then " +
 		"  kill " + signal + " $PIDS 2>/dev/null || true; " +
 		"fi; " +
@@ -503,7 +503,7 @@ func buildInstallOrRepairScript(cfg *backupNodeRemoteConfig, tempBinary string, 
 		"  set +e; " + killAgentProcessesScript(cfg.NodeID, "-TERM") + "; sleep 1; " + killAgentProcessesScript(cfg.NodeID, "-9") + "; set -e",
 		"  ( nohup setsid env " + envTools + " " + agentBin + " " + argsCommon + " </dev/null >> " + logPath + " 2>&1 & disown ) >/dev/null 2>&1 || true",
 		"fi",
-		"echo '[install] phase 4/4: collect tail log'",
+		"echo '[install] phase 4/4: collect tail log (includes historical entries; verify current heartbeat)'",
 		"sleep 2",
 		"tail -n 40 " + logPath + " 2>/dev/null || echo '(no log content yet)'",
 	}, "\n")

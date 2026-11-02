@@ -113,7 +113,7 @@ func cleanupBackupRunArtifacts(run *backupModels.InsightBackupRuns) {
 }
 
 // collectBackupRunArtifactPaths 读取执行记录中记录的产物/日志路径。
-// storage_artifact_path 列为运行期上报字段、未映射进 GORM 模型，故统一按列名查询。
+// 按已保存的完整产物引用清理，兼容本地文件和对象存储路径。
 func collectBackupRunArtifactPaths(runID uint64) []string {
 	if runID == 0 {
 		return nil

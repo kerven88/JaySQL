@@ -79,6 +79,7 @@ type InsightBackupRuns struct {
 	ToolImage            string            `gorm:"type:varchar(64);not null;default:'';comment:Docker镜像" json:"tool_image"`
 	ServerVersion        string            `gorm:"type:varchar(64);not null;default:'';comment:服务端版本" json:"server_version"`
 	FileName             string            `gorm:"type:varchar(255);not null;default:'';comment:产物文件名" json:"file_name"`
+	StorageArtifactPath  string            `gorm:"type:varchar(2048);not null;default:'';comment:存储目标产物引用" json:"storage_artifact_path"`
 	FilePath             string            `gorm:"type:varchar(1024);not null;default:'';comment:产物路径" json:"file_path"`
 	SizeBytes            int64             `gorm:"type:bigint;not null;default:0;comment:文件大小" json:"size_bytes"`
 	Sha256               string            `gorm:"type:varchar(128);not null;default:'';comment:sha256" json:"sha256"`
@@ -141,13 +142,13 @@ type InsightBackupSets struct {
 	// 不再现场 find 文件（直传/跨节点场景下产物与附属文件往往不在同一处）。
 	// VerifiedAt 为 NULL 表示该备份集从未执行过验证流程（本功能上线前的历史数据），
 	// 恢复侧需回退到「现场查找附属文件」的旧逻辑，不能直接按未验证处理。
-	MetadataVerified bool      `gorm:"type:tinyint(1);not null;default:0;comment:元数据已验证" json:"metadata_verified"`
-	ChecksumVerified bool      `gorm:"type:tinyint(1);not null;default:0;comment:校验和已验证" json:"checksum_verified"`
+	MetadataVerified bool       `gorm:"type:tinyint(1);not null;default:0;comment:元数据已验证" json:"metadata_verified"`
+	ChecksumVerified bool       `gorm:"type:tinyint(1);not null;default:0;comment:校验和已验证" json:"checksum_verified"`
 	VerifiedAt       *time.Time `gorm:"type:datetime;null;default:null;comment:验证时间(NULL=历史数据未验证)" json:"verified_at"`
-	ServerVersion    string          `gorm:"type:varchar(64);not null;default:'';comment:服务端版本" json:"server_version"`
-	Tool             string          `gorm:"type:varchar(64);not null;default:'';comment:工具" json:"tool"`
-	ToolImage        string          `gorm:"type:varchar(64);not null;default:'';comment:Docker镜像" json:"tool_image"`
-	CreatedBy        string          `gorm:"type:varchar(64);not null;default:'';comment:创建人" json:"created_by"`
+	ServerVersion    string     `gorm:"type:varchar(64);not null;default:'';comment:服务端版本" json:"server_version"`
+	Tool             string     `gorm:"type:varchar(64);not null;default:'';comment:工具" json:"tool"`
+	ToolImage        string     `gorm:"type:varchar(64);not null;default:'';comment:Docker镜像" json:"tool_image"`
+	CreatedBy        string     `gorm:"type:varchar(64);not null;default:'';comment:创建人" json:"created_by"`
 }
 
 func (InsightBackupSets) TableName() string {

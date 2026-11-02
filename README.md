@@ -323,6 +323,86 @@ Docker Desktop 可用 `host.docker.internal` 访问宿主机；Linux 可在 `jay
 node_exporter 及备份 agent / mysqldump / pg_dump / xtrabackup 按相应功能要求部署到被管主机，
 本 Compose 不会安装这些远程组件。被管数据库、SSH 和存储目标也必须对应用容器网络可达。
 
+### 备份 Agent 安装与使用
+
+**Agent 的作用与部署位置**
+
+当前数据库主机备份任务由 Agent 执行：JaySQL 创建和调度任务，数据库主机上的 Agent 获取任务，调用 `mysqldump`、`pg_dump`、`xtrabackup` 或 `pgBackRest` 等工具，上传产物并上报心跳、日志和结果。安装 Agent 不等于已安装所有数据库备份工具，需根据数据库版本与备份类型准备兼容工具。
+
+例如 JaySQL Docker Compose 部署在 `192.168.50.84`，MySQL 位于 `192.168.50.137`：
+
+| 组件 / 配置 | 所在位置或填写值 |
+| :--- | :--- |
+| JaySQL 平台 | `.84`，示例发布地址 `http://192.168.50.84:8083` |
+| 备份 Agent 与备份工具 | `.137` 数据库主机 |
+| Agent 回连平台地址 | `http://192.168.50.84:8083`，不能使用容器内部服务名或 `.137` 的 localhost |
+| 执行节点工作目录 | `.137` 上的目录，例如 `/data/backup` |
+| S3 Bucket / 对象路径前缀 | 最终对象存储位置，与本地工作目录分开配置 |
+
+SSH 用于安装、修复、重启 Agent 及主机检查；实际任务由 Agent 执行。数据库连接通过、SSH 登录成功和 Agent 在线是独立状态，启动备份前必须确认 Agent 在线。
+
+**1. 安装前准备**
+
+- 在实例管理中保存数据库主机 SSH 地址、用户与密码或私钥。
+- 当前远程安装逻辑要求 SSH 用户为 root，或普通用户通过非交互式 `sudo -n true` 检查。只有交互式输入密码才能执行 `sudo -i`，不代表平台自动安装能成功。请由主机管理员按组织权限要求配置安装与服务管理权限；页面会返回具体执行错误。
+- 平台需能通过 SSH 访问数据库主机；数据库主机需能回连平台发布地址。示例在 `.137` 上验证：
+
+```bash
+curl --fail --connect-timeout 5 http://192.168.50.84:8083/
+# 使用准备在页面填写的 SSH 用户执行；安装前应成功退出
+sudo -n true
+```
+
+Docker 镜像包含 `/usr/local/bin/backup-agent` 供远程下发，不会仅因启动 Compose 就自动在数据库主机安装服务。Agent 二进制必须与目标数据库主机的操作系统和 CPU 架构匹配；当前镜像内二进制为 Linux，CPU 架构与镜像一致。
+
+**2. 在页面安装 Agent**
+
+1. 打开“备份恢复 → 数据备份 → 新建 / 编辑任务”，选择数据源。
+2. 在步骤条下方的“备份 Agent”卡片确认执行主机，点击醒目的“安装 / 修复 Agent”按钮。页面在新窗口打开，不会清空当前任务配置。尚未匹配到节点时，先运行任务预校验，再返回使用入口。
+3. 安装页填写数据库主机的 SSH 信息与数据库主机可访问的“平台地址”。示例填写主机 `192.168.50.137`、端口 `22`、用户 `money`、平台地址 `http://192.168.50.84:8083`；安装目录和服务名可先保持默认。
+4. 点击“测试连接”，首次安装点击“安装 Agent”；已有服务损坏用“修复 Agent”，仅重新拉起进程用“重启 Agent”。检查操作结果详情，不能只看是否执行了操作。
+5. 点击“重新检测节点状态”，确认 `ONLINE`，返回任务页刷新节点状态并重新预校验。
+
+安装入口需要 `backup.task.manage` 权限；“实例管理 → 编辑实例”只配置连接信息，没有安装按钮。备用直达地址为 `/backup/agent-install/<节点ID>`，例如 `http://192.168.50.84:8083/backup/agent-install/1`。节点 ID 以页面实际匹配结果为准。
+
+**3. 验证服务与工作目录**
+
+以下命令在数据库 / Agent 主机 `.137` 上执行，示例节点 ID 为 1。修改过服务名时使用实际名称：
+
+```bash
+sudo systemctl status goinsight-backup-agent-1 --no-pager -l
+sudo journalctl -u goinsight-backup-agent-1 -n 100 --no-pager
+pgrep -af backup-agent
+sudo systemctl show goinsight-backup-agent-1 -p User -p Group
+```
+
+默认安装目录是 `/usr/local/goinsight/backup-agent`，日志文件是该目录下的 `backup-agent.log`，页面可修改。平台生成的 systemd 服务默认以配置的 SSH 用户运行；以实际服务的 `User` 为准。若显示“Unit could not be found”，说明该服务名尚未安装成功或已修改，不能根据空的 `User=` 判断运行身份。
+
+假设 Agent 运行用户为 `money`，管理员在 `.137` 创建工作目录并授权：
+
+```bash
+sudo mkdir -p /data/backup
+sudo chown money:$(id -gn money) /data/backup
+sudo chmod 750 /data/backup
+sudo -u money sh -c 'touch /data/backup/.write-test && rm /data/backup/.write-test'
+```
+
+任务页面填写 `/data/backup`。`.84` 的 JaySQL 容器挂载 `./jaysql_backup:/data/backup` 不会映射到 `.137`，本示例的远端 Agent 备份不依赖该挂载。Agent 若运行于容器，则需在 Agent 容器中配置挂载，并填写该容器内路径。
+
+**4. 常见安装 / 离线问题**
+
+| 现象 | 排查位置 |
+| :--- | :--- |
+| SSH 测试通过但安装失败 | 安装页操作详情；检查普通用户 sudo 权限、安装目录及 systemd 服务管理权限 |
+| 缺少 backup-agent 二进制 | 更新并重建 JaySQL 镜像，检查容器内 `/usr/local/bin/backup-agent` |
+| `Exec format error` | 二进制与目标主机 CPU 架构是否匹配 |
+| 服务已启动但 `OFFLINE` | Agent 日志、回连平台地址、端口与网络；服务启动不等于心跳成功 |
+| `401` / `403` | 平台地址是否指向正确实例，以及节点 ID / Token 是否与平台记录一致；不要公开 Token |
+| `Unknown column 'br.storage_artifact_path'` | 升级到包含该模型字段的版本并重建 JaySQL，启动时自动迁移补列；若仍报错，检查启动迁移错误及元数据库账号 ALTER 权限 |
+| 工作目录 permission denied | 先确认错误来自平台还是 Agent，再在实际执行环境检查运行用户和目录写权限，不要仅用 root 验证 |
+
+“执行过自动修复”不代表恢复成功。若仍离线，请查看“执行环境自动修复 → 详情”和安装页的操作输出，再结合 Agent 日志排查。
+
 #### 数据库 SSH 通过，但备份执行节点 OFFLINE
 
 数据库连接、SSH 连接和备份 Agent 心跳是独立检查。SSH 测试成功不代表 Agent 已安装或能回连平台。Docker 镜像同时打包 JaySQL 和 `/usr/local/bin/backup-agent`，供平台通过 SSH 下发到备份执行主机；该 Agent 与镜像使用相同的 CPU 架构。异构主机需自行提供对应架构的 Agent，并通过 `GOINSIGHT_AGENT_BINARY` 指定容器内的二进制路径。
