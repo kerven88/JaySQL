@@ -335,7 +335,7 @@ docker compose up -d --build jaysql
 docker compose exec jaysql sh -c 'test -s /usr/local/bin/backup-agent && ls -l /usr/local/bin/backup-agent'
 ```
 
-在新建 / 编辑备份任务页的备份参数区，点击“安装 / 修复 Agent（新窗口）”；入口会匹配数据源主机上的节点。尚无节点时先运行预校验，再打开入口。也可直接访问 `/backup/agent-install/<节点ID>`，例如节点 1 为 `/backup/agent-install/1`（需要备份任务管理权限）。安装完成后返回任务页重新预校验。平台地址必须是执行主机可访问的地址，例如 `http://<JaySQL宿主机IP>:8083`（使用实际发布端口或域名），不能填写容器内部服务名或该主机无法访问的 `localhost`。数据库主机需允许访问此地址。SSH 用户还需具备安装目录写权限和服务管理权限；“SSH 验证通过”不验证这些权限。
+在新建 / 编辑备份任务页选择数据源后，在步骤条下方的“备份 Agent”状态卡片点击“安装 / 修复 Agent”；入口会匹配数据源主机上的节点。尚无节点时先运行预校验，再打开入口。也可直接访问 `/backup/agent-install/<节点ID>`，例如节点 1 为 `/backup/agent-install/1`（需要备份任务管理权限）。安装完成后返回任务页重新预校验。平台地址必须是执行主机可访问的地址，例如 `http://<JaySQL宿主机IP>:8083`（使用实际发布端口或域名），不能填写容器内部服务名或该主机无法访问的 `localhost`。数据库主机需允许访问此地址。SSH 用户还需具备安装目录写权限和服务管理权限；“SSH 验证通过”不验证这些权限。
 
 若仍离线，在执行主机检查实际节点服务及日志（以下以节点 ID 1 的默认服务名为例）：
 

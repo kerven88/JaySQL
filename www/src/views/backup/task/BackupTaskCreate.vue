@@ -6,6 +6,23 @@
       </a-steps>
     </a-card>
 
+    <section v-if="currentInstance" class="agent-setup-banner" :class="{ 'agent-setup-banner--online': agentNodeOnline }" aria-label="备份 Agent 准备状态">
+      <div class="agent-setup-banner__body">
+        <div class="agent-setup-banner__title">
+          备份 Agent
+          <a-tag :color="agentNodeOnline ? 'success' : 'warning'">{{ agentNodeOnline ? '在线' : agentInstallNodeId ? '需检查 / 安装' : '待匹配节点' }}</a-tag>
+        </div>
+        <div>执行主机：<strong>{{ currentInstance.hostname }}</strong><span v-if="agentInstallNodeId"> · 节点 {{ agentInstallNodeId }}</span></div>
+        <div class="agent-setup-banner__hint">备份前需确保该主机的 Agent 在线。工作目录属于该主机 / Agent，不是 JaySQL 服务器；最终执行节点以预校验为准。</div>
+        <div v-if="!agentInstallNodeId" class="agent-setup-banner__hint">先运行任务预校验以解析执行节点，匹配后即可安装 Agent。</div>
+      </div>
+      <div class="agent-setup-banner__actions">
+        <a-button v-if="agentInstallNodeId" type="primary" size="large" :href="router.resolve({ path: `/backup/agent-install/${agentInstallNodeId}` }).href" target="_blank" rel="noopener noreferrer">{{ agentNodeOnline ? '管理 / 修复 Agent ↗' : '安装 / 修复 Agent ↗' }}</a-button>
+        <a-button :loading="uiState.nodesLoading" @click="loadNodes">刷新节点状态</a-button>
+        <span class="agent-setup-banner__hint">在新窗口打开，保留当前任务配置</span>
+      </div>
+    </section>
+
     <div class="create-body">
       <a-card class="create-main-card" :bordered="false">
         <div v-if="currentStep === 0" class="step-panel">
@@ -198,17 +215,6 @@
                       :placeholder="isObjectStorageTarget ? '例如 /data/backup；留空使用默认工作目录' : isPhysicalDriver ? physicalOutputDirPlaceholder : '填写目标根路径下的子目录；可留空'"
                     />
                   </a-form-item>
-                  <a-alert type="info" show-icon style="margin-bottom: 16px">
-                    <template #message>备份执行位置：数据库主机 {{ currentInstance?.hostname || '（请先选择数据源）' }}</template>
-                    <template #description>
-                      工作目录需在该主机的 Agent 执行环境中创建并授权，不是 JaySQL 服务所在机器的目录。Agent 若以容器运行，填写 Agent 容器内路径。最终执行节点以预校验结果为准。
-                      <div v-if="agentInstallNodeId" style="margin-top: 8px">
-                        <a :href="router.resolve({ path: `/backup/agent-install/${agentInstallNodeId}` }).href" target="_blank" rel="noopener noreferrer">安装 / 修复 Agent（新窗口）</a>
-                        <span> · 节点 {{ agentInstallNodeId }}；完成后返回此页重新预校验</span>
-                      </div>
-                      <div v-else>尚未匹配到节点。请先运行预校验以解析 / 创建执行节点，再使用此处安装入口。</div>
-                    </template>
-                  </a-alert>
                   <a-alert v-if="isObjectStorageTarget" type="info" show-icon message="最终存储位置（路径示例）" :description="storageSummary" style="margin-bottom: 16px; overflow-wrap: anywhere" />
                   <a-collapse v-model:activeKey="advancedOpen" ghost class="advanced-options-collapse">
                     <a-collapse-panel key="advanced" header="高级选项">
@@ -905,6 +911,10 @@ const agentInstallNodeId = computed(() => {
   if (actualId) return actualId
   const host = String(currentInstance.value?.hostname || '').trim().toLowerCase()
   return nodes.value.find((node) => host && String(node.host || '').trim().toLowerCase() === host)?.id || null
+})
+const agentNodeOnline = computed(() => {
+  const node = nodes.value.find((item) => item.id === agentInstallNodeId.value)
+  return String(node?.status || '').toUpperCase() === 'ONLINE'
 })
 const outputDirHelp = computed(() => isObjectStorageTarget.value
   ? `此目录属于数据库主机 ${currentInstance.value?.hostname || '（待选择）'} 上的备份 Agent，不是 JaySQL 服务器目录。用于元数据、日志及需要落盘的产物，不作为 S3 前缀。填写 Agent 执行环境中可写的绝对路径；留空使用默认工作目录。Agent 容器部署时需配置该容器的挂载。直传模式不一定生成本地完整备份文件。`
@@ -2486,6 +2496,24 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.agent-setup-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-left: 4px solid #d48806;
+  border-radius: 12px;
+}
+.agent-setup-banner--online { background: #f0faf7; border-color: #b7dfd2; border-left-color: #0f766e; }
+.agent-setup-banner__title { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.agent-setup-banner__hint { font-size: 12px; color: #596579; margin-top: 6px; }
+.agent-setup-banner__actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; flex-shrink: 0; }
+@media (max-width: 768px) { .agent-setup-banner { flex-direction: column; align-items: stretch; padding: 16px; } }
+
 html, body, #app {
   height: 100%;
   margin: 0;
